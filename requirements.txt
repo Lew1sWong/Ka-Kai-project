@@ -1,0 +1,20 @@
+# Web layer
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+aiofiles>=23.2.1
+python-multipart>=0.0.9
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+
+# Volcengine SDK  (VisualService — cv_submit_task / cv_get_result)
+volcengine>=1.0.98
+
+# LLM  (DeepSeek via OpenAI-compatible API)
+openai>=1.30.0
+
+# Telegram bot
+aiogram>=3.4.1
+
+# Optional: production async job queue
+# celery[redis]>=5.3.0
+# redis>=5.0.0
