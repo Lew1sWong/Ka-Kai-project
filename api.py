@@ -275,5 +275,14 @@ async def feishu_card(request: Request):
     Feishu card-action callback — called when users click buttons on interactive cards.
     Register this URL in Feishu console → App Features → Bot → Card Callback URL.
     """
-    body = await request.json()
-    return await _feishu_card(body)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    logger.info("Feishu card callback body: %s", body)
+    try:
+        result = await _feishu_card(body)
+    except Exception as exc:
+        logger.exception("Card handler error")
+        result = {"toast": {"type": "error", "content": str(exc)[:80]}}
+    return result

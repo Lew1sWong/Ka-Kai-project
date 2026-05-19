@@ -106,6 +106,23 @@ async def execute_plan(
             ctx["enhanced_prompt"] = await _enhance_prompt(desc, deepseek_api_key)
             logger.info("Enhanced prompt: %s", ctx["enhanced_prompt"])
 
+        # Guard: figurine_to_anime needs an image — if planner misfired, skip
+        # it and fall through to text_to_video (added automatically below).
+        if step.tool == "figurine_to_anime" and not ctx.get("image_url"):
+            logger.warning(
+                "Step %d/%d: skipping figurine_to_anime — image_url not in context; "
+                "will use text_to_video instead", i, total
+            )
+            from tools import TextToVideoTool
+            if "enhanced_prompt" not in ctx:
+                ctx["enhanced_prompt"] = await _enhance_prompt(
+                    ctx.get("user_description", ""), deepseek_api_key
+                )
+            output = await TextToVideoTool().run(ctx)
+            ctx.update(output)
+            logger.info("Step %d/%d done (fallback text_to_video) — keys: %s", i, total, list(output))
+            continue
+
         logger.info(
             "Step %d/%d: running '%s'  reason='%s'",
             i, total, step.tool, step.reason,

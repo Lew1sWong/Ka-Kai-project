@@ -90,12 +90,11 @@ Return a single JSON object with one key "steps" containing a list:
 3. Tool outputs are piped forward: a video_url produced by step N is available
    as input to step N+1 automatically. figurine_to_anime overwrites image_url,
    so any tool after it automatically uses the anime render.
-4. FIGURINE RULE — only when image_url IS in available assets:
-   If "image_url" is available AND the user mentions figurine / figure / 手办 /
-   toy / collectible, OR the description implies a 3D figurine photo → plan:
-     figurine_to_anime → image_to_video   (2 steps, in this order)
-   figurine_to_anime also accepts prompt_suffix for style details.
-   If "image_url" is NOT available, do NOT use figurine_to_anime — use text_to_video instead.
+4. FIGURINE RULE — STRICT PRECONDITION: "image_url" MUST be in available assets.
+   IF "image_url" IS in available assets AND the user mentions figurine / figure /
+   手办 / toy / collectible → plan: figurine_to_anime → image_to_video (2 steps).
+   IF "image_url" is NOT in available assets → NEVER use figurine_to_anime, even
+   if the user says 手办. Use text_to_video for pure-text figurine requests.
 5. MULTI-SHOT RULE:
    If the user provides a detailed script with multiple scenes, OR explicitly asks
    for "多镜头", "多场景", "分镜", "multi-shot", or "multi-scene" → use multi_shot_video

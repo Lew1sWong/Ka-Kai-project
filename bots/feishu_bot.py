@@ -549,23 +549,41 @@ async def handle_card_action(body: dict) -> dict:
     We use it exclusively for the welcome-card language-selection buttons.
 
     Must be registered in Feishu console → App Features → Bot → Card Callback URL.
-    """
-    # Verification challenge (Feishu sends this when you first save the URL)
-    if body.get("type") == "url_verification":
-        return {"challenge": body.get("challenge", "")}
 
-    action  = body.get("action", {})
-    value   = action.get("value", {})
+    Feishu card callback body (v1/v2 both handled):
+      {
+        "open_id": "ou_xxx",
+        "open_chat_id": "oc_xxx",
+        "action": { "value": { "action": "set_lang", "lang": "zh", "open_id": "..." } },
+        ...
+      }
+    """
+    logger.debug("handle_card_action body keys: %s", list(body.keys()))
+
+    # ── pull action value — handle both legacy and card-kit formats ──────
+    action = body.get("action") or {}
+    # card kit v2 nests value differently in some SDK versions
+    value  = action.get("value") or action.get("form_value") or {}
+    if isinstance(value, str):
+        try:
+            import json as _json
+            value = _json.loads(value)
+        except Exception:
+            value = {}
 
     if value.get("action") != "set_lang":
-        return {}
+        logger.info("Card action ignored (not set_lang): value=%s", value)
+        return {"toast": {"type": "info", "content": "OK"}}
 
     lang    = value.get("lang", "zh")
+    # open_id can be in value (we embed it) or top-level body
     open_id = value.get("open_id") or body.get("open_id", "")
     chat_id = body.get("open_chat_id", "")
 
+    logger.info("Card set_lang: lang=%s open_id=%s chat_id=%s", lang, open_id, chat_id)
+
     if not open_id:
-        return {}
+        return {"toast": {"type": "error", "content": "Missing open_id"}}
 
     _set_state(open_id, _S_WAIT_IMAGE, lang=lang)
 
@@ -580,13 +598,7 @@ async def handle_card_action(body: dict) -> dict:
             "💡 Send a multi-scene script for multi-shot generation!",
         )))
 
-    # Return a toast that briefly appears on the card
-    return {
-        "toast": {
-            "type":    "success",
-            "content": "语言已设置 / Language set ✓",
-        }
-    }
+    return {"toast": {"type": "success", "content": "✓ 语言已设置 / Language set"}}
 
 
 # ---------------------------------------------------------------------------
