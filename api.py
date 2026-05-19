@@ -24,7 +24,7 @@ from typing import Optional
 import aiofiles
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 load_dotenv()  # load .env before any os.environ reads
@@ -239,16 +239,30 @@ async def get_animation_status(job_id: str):
     )
 
 
+_MEDIA_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".gif": "image/gif",  ".webp": "image/webp",
+    ".mp3": "audio/mpeg", ".mp4": "video/mp4",  ".wav": "audio/wav",
+}
+
 @app.get("/media/{filename}", include_in_schema=False)
-async def serve_media(filename: str) -> FileResponse:
+async def serve_media(filename: str) -> Response:
     """
-    Serve locally stored media files (images/audio saved from bot uploads).
-    In production: remove this and serve from TOS/S3 directly.
+    Serve locally stored media files.
+    Loads the full file into memory before sending so ngrok / proxies
+    receive a complete response body (avoids 'unexpected EOF' from Volcengine).
     """
     path = Path(f"/tmp/{filename}")
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    suffix = Path(filename).suffix.lower()
+    media_type = _MEDIA_TYPES.get(suffix, "application/octet-stream")
+    content = path.read_bytes()
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Length": str(len(content)), "Cache-Control": "public, max-age=3600"},
+    )
 
 
 @app.get("/health")

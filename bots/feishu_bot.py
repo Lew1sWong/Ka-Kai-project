@@ -275,8 +275,12 @@ async def _save_and_url(message_id: str, file_key: str, rtype: str, suffix: str)
     data: bytes = await loop.run_in_executor(
         _executor, _download_sync, message_id, file_key, rtype
     )
+    if not data:
+        raise RuntimeError("Feishu returned empty file — download may have failed silently")
     fname = f"feishu_{uuid.uuid4().hex}{suffix}"
-    Path(f"/tmp/{fname}").write_bytes(data)
+    path  = Path(f"/tmp/{fname}")
+    path.write_bytes(data)
+    logger.info("Saved %s  size=%d bytes  url=%s/media/%s", suffix, len(data), PUBLIC_BASE_URL, fname)
     return f"{PUBLIC_BASE_URL}/media/{fname}"
 
 
