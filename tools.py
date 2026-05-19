@@ -79,47 +79,83 @@ def _extract_video_url(data: dict) -> str:
     raise RuntimeError(f"No video_url found in response data: {data}")
 
 
+async def _poll_loop(task_id: str, req_key: str, label: str, use_legacy: bool) -> dict:
+    """Shared poll loop for both API paths."""
+    loop = asyncio.get_running_loop()
+    poll_body = {"req_key": req_key, "task_id": task_id}
+    for attempt in range(1, _MAX_TRIES + 1):
+        if use_legacy:
+            poll_resp = await loop.run_in_executor(
+                None, lambda: _make_svc().cv_get_result(poll_body)
+            )
+        else:
+            poll_resp = await loop.run_in_executor(
+                None, lambda: _make_svc().cv_sync2async_get_result(poll_body)
+            )
+        _assert_ok(poll_resp, f"{label}/poll")
+        data = poll_resp["data"]
+        status = data.get("status")
+        if status == _STATUS_DONE:
+            logger.info("%s done  task_id=%s", label, task_id)
+            return {"task_id": task_id, "data": data}
+        if status == _STATUS_FAILED:
+            reason = data.get("message") or data.get("err_msg", str(status))
+            raise RuntimeError(f"{label} failed  task_id={task_id}  reason={reason}")
+        logger.debug("%s attempt=%d/%d status=%s", label, attempt, _MAX_TRIES, status)
+        await asyncio.sleep(_POLL_INTERVAL)
+    raise TimeoutError(
+        f"{label} task_id={task_id} timed out after {_MAX_TRIES * _POLL_INTERVAL}s"
+    )
+
+
 async def _submit_and_poll(body: dict, label: str) -> dict:
     """
     Submit a Volcengine async task and poll until done.
+
+    Tries cv_sync2async_submit_task first (newer path).
+    Falls back to cv_submit_task (older path) if the newer endpoint
+    returns a 504 — which happens when the service uses the legacy API.
+
     Returns {"task_id": str, "data": dict} on success.
     """
     loop = asyncio.get_running_loop()
 
-    # Submit
+    # ── Try newer path: cv_sync2async_submit_task ─────────────────────
     try:
-        resp = await loop.run_in_executor(None, lambda: _make_svc().cv_sync2async_submit_task(body))
+        resp = await loop.run_in_executor(
+            None, lambda: _make_svc().cv_sync2async_submit_task(body)
+        )
+        # If the gateway returned raw HTML (504), resp will be bytes
+        if isinstance(resp, bytes) and b"504" in resp:
+            raise RuntimeError("504")
+        _assert_ok(resp, f"{label}/submit")
+        task_id = resp["data"]["task_id"]
+        logger.info("%s submitted (sync2async)  task_id=%s", label, task_id)
+        return await _poll_loop(task_id, body["req_key"], label, use_legacy=False)
+
+    except RuntimeError as exc:
+        if "504" not in str(exc):
+            raise
+        logger.warning(
+            "%s: cv_sync2async_submit_task returned 504 — falling back to cv_submit_task",
+            label,
+        )
+
+    # ── Fallback: cv_submit_task (legacy path) ────────────────────────
+    try:
+        resp = await loop.run_in_executor(
+            None, lambda: _make_svc(socket_timeout=120).cv_submit_task(body)
+        )
     except Exception as e:
         raw = e.args[0] if e.args else b""
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8", errors="replace")
-        raise RuntimeError(f"[{label}/submit] {raw}") from None
-    _assert_ok(resp, f"{label}/submit")
+        raise RuntimeError(f"[{label}/submit-legacy] {raw}") from None
+
+    _assert_ok(resp, f"{label}/submit-legacy")
     task_id = resp["data"]["task_id"]
-    logger.info("%s submitted  task_id=%s", label, task_id)
-
-    # Poll
-    poll_body = {"req_key": body["req_key"], "task_id": task_id}
-    for attempt in range(1, _MAX_TRIES + 1):
-        poll_resp = await loop.run_in_executor(None, lambda: _make_svc().cv_sync2async_get_result(poll_body))
-        _assert_ok(poll_resp, f"{label}/poll")
-        data = poll_resp["data"]
-        status = data.get("status")
-
-        if status == _STATUS_DONE:
-            logger.info("%s done  task_id=%s", label, task_id)
-            return {"task_id": task_id, "data": data}
-
-        if status == _STATUS_FAILED:
-            reason = data.get("message") or data.get("err_msg", str(status))
-            raise RuntimeError(f"{label} failed  task_id={task_id}  reason={reason}")
-
-        logger.debug("%s attempt=%d/%d status=%s", label, attempt, _MAX_TRIES, status)
-        await asyncio.sleep(_POLL_INTERVAL)
-
-    raise TimeoutError(
-        f"{label} task_id={task_id} timed out after {_MAX_TRIES * _POLL_INTERVAL}s"
-    )
+    logger.info("%s submitted (legacy)  task_id=%s", label, task_id)
+    return await _poll_loop(task_id, body["req_key"], label, use_legacy=True)
 
 
 # ---------------------------------------------------------------------------
