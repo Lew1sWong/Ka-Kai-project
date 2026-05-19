@@ -624,8 +624,6 @@ for an animated video — run figurine_to_anime FIRST, then image_to_video."""
     _ANIME_MODEL = "lucataco/sdxl-controlnet:06775cd262843edbde5abab958abdbb65a0a6b58dcd869086358b1f55a0b2c70"
 
     async def run(self, ctx: dict) -> dict:
-        import replicate  # imported here so the rest of the app works without replicate installed
-
         image_url = ctx.get("image_url")
         if not image_url:
             raise ValueError("[FigurineToAnime] image_url is required in context")
@@ -634,13 +632,17 @@ for an animated video — run figurine_to_anime FIRST, then image_to_video."""
         if not api_token:
             raise RuntimeError("[FigurineToAnime] REPLICATE_API_TOKEN env var is not set")
 
-        client = replicate.Client(api_token=api_token)
+        # Set token via env var — the most reliable path for replicate.async_run()
+        os.environ["REPLICATE_API_TOKEN"] = api_token
+        import replicate
+
+        loop = asyncio.get_running_loop()
 
         # ── Step 1: depth extraction ──────────────────────────────────────
         logger.info("[FigurineToAnime] extracting depth map  image_url=%s", image_url)
-        depth_out = await client.async_run(
-            self._DEPTH_MODEL,
-            input={"image": image_url},
+        depth_out = await loop.run_in_executor(
+            None,
+            lambda: replicate.run(self._DEPTH_MODEL, input={"image": image_url}),
         )
         depth_url = _replicate_to_url(depth_out)
         logger.info("[FigurineToAnime] depth map ready  depth_url=%s", depth_url)
@@ -656,24 +658,27 @@ for an animated video — run figurine_to_anime FIRST, then image_to_video."""
             base_prompt = f"{base_prompt}, {suffix}"
 
         logger.info("[FigurineToAnime] converting to anime style  prompt='%s'", base_prompt)
-        anime_out = await client.async_run(
-            self._ANIME_MODEL,
-            input={
-                "prompt":            base_prompt,
-                "negative_prompt":   "3D render, photorealistic, blurry, watermark, text",
-                "image":             depth_url,   # depth map drives ControlNet
-                "num_inference_steps": 30,
-                "guidance_scale":    7.5,
-                "controlnet_conditioning_scale": 0.8,
-                "scheduler":         "K_EULER_ANCESTRAL",
-            },
+        anime_out = await loop.run_in_executor(
+            None,
+            lambda: replicate.run(
+                self._ANIME_MODEL,
+                input={
+                    "prompt":          base_prompt,
+                    "negative_prompt": "3D render, photorealistic, blurry, watermark, text",
+                    "image":           depth_url,
+                    "num_inference_steps": 30,
+                    "guidance_scale":  7.5,
+                    "controlnet_conditioning_scale": 0.8,
+                    "scheduler":       "K_EULER_ANCESTRAL",
+                },
+            ),
         )
         anime_url = _replicate_to_url(anime_out)
         logger.info("[FigurineToAnime] anime image ready  anime_url=%s", anime_url)
 
         return {
             "anime_image_url": anime_url,
-            "image_url":       anime_url,   # downstream image_to_video picks this up
+            "image_url":       anime_url,
         }
 
 
