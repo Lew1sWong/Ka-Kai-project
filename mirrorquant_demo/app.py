@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from mirrorquant_demo.mirror_search import load_prices, find_mirrors 
+
 import json
 from pathlib import Path
 from typing import Literal
@@ -11,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = BASE_DIR / "static"
 
-Mode = Literal["price_dna", "economic_dna", "social_dna"]
+Mode = Literal["price_dna", "economic_dna", "social_dna"] # To set the variable to be one of these 3 menu options only
 
 
 def _load_json(filename: str):
@@ -44,9 +46,56 @@ async def health():
     return {"status": "ok", "app": "mirrorquant-demo"}
 
 
-@app.get("/api/heroes")
-async def list_heroes():
-    return {"heroes": _load_json("heroes.json")}
+@app.get("/api/mirrors")
+async def get_mirrors(
+    ticker: str,
+    mode: Mode = "price_dna",
+):
+    normalized = ticker.upper()
+
+    if mode != "price_dna":
+        raise HTTPException(
+            status_code=400,
+            detail="Only price_dna is supported in the first real MVP"
+        )
+
+    heroes = _load_json("heroes.json")
+    hero = next((item for item in heroes if item["ticker"] == normalized), None)
+    if hero is None:
+        raise HTTPException(status_code=404, detail=f"No hero data for {normalized}")
+
+    df = load_prices(str(DATA_DIR / "prices.csv"))
+
+    try:
+        results = find_mirrors(
+            df=df,
+            hero_ticker=normalized,
+            start=hero["start_date"],
+            end=hero["end_date"],
+            window_size=40,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    matches = []
+    for row in results.head(5).itertuples(index=False):
+        matches.append(
+            {
+                "ticker": row.ticker,
+                "name": row.ticker,
+                "score": float(row.similarity),
+                "regime_label": "Price DNA match",
+                "sector": "Unknown",
+                "explanation": f"{row.ticker} shows similar price and volume behavior to {normalized} during the selected hero window.",
+            }
+        )
+
+    return {
+        "ticker": normalized,
+        "mode": mode,
+        "hero": hero,
+        "matches": matches,
+    }
 
 
 @app.get("/api/market-watch")
@@ -62,23 +111,3 @@ async def get_industry_chain(ticker: str):
         raise HTTPException(status_code=404, detail=f"No industry chain data for {normalized}")
     return {"ticker": normalized, "relationships": chain_data[normalized]}
 
-
-@app.get("/api/mirrors")
-async def get_mirrors(
-    ticker: str,
-    mode: Mode = "price_dna",
-):
-    matches = _load_json("mirror_matches.json")
-    normalized = ticker.upper()
-    if normalized not in matches:
-        raise HTTPException(status_code=404, detail=f"No mirror data for {normalized}")
-    return {
-        "ticker": normalized,
-        "mode": mode,
-        "hero": next(
-            hero
-            for hero in _load_json("heroes.json")
-            if hero["ticker"] == normalized
-        ),
-        "matches": matches[normalized][mode],
-    }

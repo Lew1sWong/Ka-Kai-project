@@ -1,3 +1,4 @@
+# Mirror Search: Find stocks with similar recent behavior to a "hero" stock
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler

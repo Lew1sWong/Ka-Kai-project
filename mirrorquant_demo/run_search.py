@@ -1,3 +1,4 @@
+#Test script for mirror search. Run this to find stocks with similar recent behavior to a "hero" stock.
 from pathlib import Path
 
 import pandas as pd
