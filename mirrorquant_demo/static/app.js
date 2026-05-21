@@ -1,5 +1,7 @@
 const heroSelect = document.getElementById("hero-select");
 const modeSelect = document.getElementById("mode-select");
+const startDateInput = document.getElementById("start-date");
+const endDateInput = document.getElementById("end-date");
 const findButton = document.getElementById("find-button");
 
 const heroCard = document.getElementById("hero-card");
@@ -81,20 +83,22 @@ function setLoadingState(isLoading) {
 function renderSummary(hero, mode, matchData) {
   const dna = hero[mode];
   const effectiveWindow = matchData.effective_hero_window;
+  const selectedWindow = matchData.selected_window;
 
   activeMode.textContent = modeLabel(mode);
   searchBackend.textContent = backendLabel(matchData.search_backend);
   heroRegime.textContent = matchData.hero_regime_code || dna.regime_code;
   effectiveWindowLabel.textContent = effectiveWindow
     ? `${effectiveWindow.start_date} to ${effectiveWindow.end_date}`
-    : `${hero.start_date} to ${hero.end_date}`;
+    : `${selectedWindow.start_date} to ${selectedWindow.end_date}`;
 }
 
-function renderHero(hero, mode, effectiveWindow = null, searchMode = null) {
+function renderHero(hero, mode, selectedWindow, effectiveWindow = null, searchMode = null) {
   const dna = hero[mode];
-  const windowLabel = effectiveWindow
+  const requestedLabel = `${selectedWindow.start_date} to ${selectedWindow.end_date}`;
+  const encodedLabel = effectiveWindow
     ? `${effectiveWindow.start_date} to ${effectiveWindow.end_date} (${effectiveWindow.window_size} trading-day model window)`
-    : `${hero.start_date} to ${hero.end_date}`;
+    : requestedLabel;
   const backendNote = searchMode === "vqvae"
     ? `<p class="meta">Using trained VQ-VAE Price DNA encoding.</p>`
     : searchMode === "mock"
@@ -104,7 +108,7 @@ function renderHero(hero, mode, effectiveWindow = null, searchMode = null) {
   heroCard.innerHTML = `
     <div class="card hero-card">
       <h3>${hero.name} (${hero.ticker})</h3>
-      <p class="meta">${windowLabel}</p>
+      <p class="meta">Selected window: ${requestedLabel}</p>
       <p>${hero.summary}</p>
       <p><strong>${hero.window_label}</strong></p>
       <div class="metric-row">
@@ -117,6 +121,7 @@ function renderHero(hero, mode, effectiveWindow = null, searchMode = null) {
           <p class="metric-value">${dna.regime_code}</p>
         </div>
       </div>
+      <p class="meta">Encoded slice: ${encodedLabel}</p>
       ${backendNote}
       <div>${traitPills(dna.traits)}</div>
     </div>
@@ -207,23 +212,41 @@ async function loadHeroes() {
   heroSelect.innerHTML = heroes.map((hero) => `
     <option value="${hero.ticker}">${hero.name} (${hero.ticker})</option>
   `).join("");
+  syncWindowInputs();
+}
+
+function syncWindowInputs() {
+  const hero = heroes.find((item) => item.ticker === heroSelect.value) || heroes[0];
+  if (!hero) {
+    return;
+  }
+  startDateInput.value = hero.start_date;
+  endDateInput.value = hero.end_date;
 }
 
 async function loadDashboard() {
   const ticker = heroSelect.value;
   const mode = modeSelect.value;
   const hero = heroes.find((item) => item.ticker === ticker);
+  const startDate = startDateInput.value || hero.start_date;
+  const endDate = endDateInput.value || hero.end_date;
 
   setLoadingState(true);
 
   try {
     const [matchData, chainData] = await Promise.all([
-      fetchJson(`/api/mirrors?ticker=${ticker}&mode=${mode}`),
+      fetchJson(`/api/mirrors?ticker=${ticker}&mode=${mode}&start_date=${startDate}&end_date=${endDate}`),
       fetchJson(`/api/industry-chain/${ticker}`),
     ]);
 
     renderSummary(hero, mode, matchData);
-    renderHero(hero, mode, matchData.effective_hero_window, matchData.search_backend);
+    renderHero(
+      hero,
+      mode,
+      matchData.selected_window,
+      matchData.effective_hero_window,
+      matchData.search_backend,
+    );
     renderMatches(matchData.matches);
     renderIndustryChain(ticker, chainData.relationships);
   } finally {
@@ -240,7 +263,10 @@ async function init() {
 
 findButton.addEventListener("click", loadDashboard);
 modeSelect.addEventListener("change", loadDashboard);
-heroSelect.addEventListener("change", loadDashboard);
+heroSelect.addEventListener("change", () => {
+  syncWindowInputs();
+  loadDashboard();
+});
 
 init().catch((error) => {
   console.error(error);

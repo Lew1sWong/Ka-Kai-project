@@ -54,6 +54,8 @@ async def list_heroes():
 async def get_mirrors(
     ticker: str,
     mode: Mode = "price_dna",
+    start_date: str | None = None,
+    end_date: str | None = None,
 ):
     normalized = ticker.upper()
 
@@ -61,6 +63,12 @@ async def get_mirrors(
     hero = next((item for item in heroes if item["ticker"] == normalized), None)
     if hero is None:
         raise HTTPException(status_code=404, detail=f"No hero data for {normalized}")
+
+    selected_start = start_date or hero["start_date"]
+    selected_end = end_date or hero["end_date"]
+
+    if selected_start > selected_end:
+        raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
 
     if mode != "price_dna":
         matches = _load_json("mirror_matches.json")
@@ -71,15 +79,19 @@ async def get_mirrors(
             "mode": mode,
             "hero": hero,
             "hero_regime_code": hero[mode]["regime_code"],
+            "selected_window": {
+                "start_date": selected_start,
+                "end_date": selected_end,
+            },
             "matches": matches[normalized][mode],
             "search_backend": "mock",
         }
 
     try:
-        results, hero_code, effective_window = find_vqvae_mirrors(
+        results, hero_code, selected_window, effective_window = find_vqvae_mirrors(
             hero_ticker=normalized,
-            start=hero["start_date"],
-            end=hero["end_date"],
+            start=selected_start,
+            end=selected_end,
             top_k=5,
         )
     except ValueError as exc:
@@ -109,6 +121,11 @@ async def get_mirrors(
         "mode": mode,
         "hero": hero,
         "hero_regime_code": hero_code,
+        "selected_window": {
+            "start_date": selected_window["start_date"].strftime("%Y-%m-%d"),
+            "end_date": selected_window["end_date"].strftime("%Y-%m-%d"),
+            "row_count": selected_window["row_count"],
+        },
         "matches": matches,
         "effective_hero_window": {
             "start_date": effective_window["start_date"].strftime("%Y-%m-%d"),
