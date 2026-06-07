@@ -138,6 +138,16 @@ def load_prices(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
     return df.sort_values(["ticker", "date"]).reset_index(drop=True)
 
+
+def serialize_close_series(window_df: pd.DataFrame) -> list[dict[str, str | float]]:
+    return [
+        {
+            "date": row.date.strftime("%Y-%m-%d"),
+            "close": float(row.close),
+        }
+        for row in window_df.itertuples(index=False)
+    ]
+
 def get_price_window(
     df: pd.DataFrame,
     ticker: str,
@@ -225,8 +235,37 @@ def stock_feature_distance(hero_features: dict, candidate_features: dict) -> flo
 
     return sum(squared_diffs) ** 0.5
 
+# Similarity function that compares the macro features of the hero's economic DNA to the macro features of another stock, and returns a similarity score based on how close the macro features are. We can use a similar approach as the stock feature distance, but applied to the macro features instead.
+# Euclidean distance
+def macro_feature_distance(hero_macro: dict, candidate_macro: dict) -> float:
+    keys = [
+        "cpi_yoy",
+        "fedfunds_level",
+        "fedfunds_6m_change",
+        "unrate_level",
+        "unrate_6m_change",
+        "yield_curve_level",    
+        "retail_sales_yoy",
+    ]
+
+    squared_diffs = []
+    for key in keys: 
+        hero_value = hero_macro.get(key)
+        candidate_value = candidate_macro.get(key)
+
+        if hero_value is None or candidate_value is None:
+            continue # Skip features where we don't have data for either the hero or the candidate
+
+        squared_diffs.append((hero_value - candidate_value) ** 2)
+    
+    if not squared_diffs: 
+        return float("inf") # If we don't have any comparable features, return infinite distance to indicate no similarity
+    
+    return sum(squared_diffs) ** 0.5
+
 # Ranking function that takes a list of candidate stocks, computes their economic DNA, compares it to the hero's DNA, and returns a ranked list of candidates based on similarity.
 def find_stock_feature_matches(
+        macro_df: pd.DataFrame,
         prices_df: pd.DataFrame, 
         hero_ticker: str,
         start_date: str,
@@ -234,6 +273,11 @@ def find_stock_feature_matches(
 ) -> list: 
     hero_window = get_price_window(prices_df, hero_ticker, start_date, end_date)
     hero_features = build_stock_window_features(hero_window)
+    hero_macro = build_macro_features(macro_df, end_date)
+
+    latest_macro_date = macro_df["date"].max().strftime("%Y-%m-%d")
+    current_macro = build_macro_features(macro_df, latest_macro_date)
+
     window_size = len(hero_window)
 
     matches = []
@@ -247,16 +291,100 @@ def find_stock_feature_matches(
             continue # Skip if we don't have enough data for this candidate
 
         candidate_features = build_stock_window_features(candidate_window)
-        distance = stock_feature_distance(hero_features, candidate_features)
+        stock_distance = stock_feature_distance(hero_features, candidate_features)
+        macro_distance = macro_feature_distance(hero_macro, current_macro)
+        combined_distance = (0.7 * stock_distance) + (0.3 * macro_distance) # Weighted average of stock and macro distances, giving more weight to stock features
 
         matches.append({
             "ticker": ticker,
-            "distance": distance,
+            "stock_distance": float(stock_distance),
+            "macro_distance": float(macro_distance),
+            "distance": float(combined_distance),
             "features": candidate_features,
+            "matched_window": {
+                "start_date": candidate_window["date"].iloc[0].strftime("%Y-%m-%d"),
+                "end_date": candidate_window["date"].iloc[-1].strftime("%Y-%m-%d"),
+            },
+            "series": serialize_close_series(candidate_window),
         })
 
     matches.sort(key=lambda item: item["distance"])
     return matches
+
+def distance_to_score(distance: float) -> float: 
+    return 1 / (1 + distance)
+
+def format_match_results(matches: list[dict]) -> list[dict]:
+    formatted = []
+    for match in matches:
+        formatted.append({
+            "ticker": match["ticker"],
+            "similarity_score": round(distance_to_score(match["distance"]), 4),
+            "stock_distance": round(match["stock_distance"], 4),
+            "macro_distance": round(match["macro_distance"], 4),
+            "features": match["features"],
+        })
+    return formatted
+
+def classify_macro_regime(macro_features: dict) -> str:
+    cpi_yoy = macro_features.get("cpi_yoy")
+    fedfunds_6m_change = macro_features.get("fedfunds_6m_change")
+    unrate_6m_change = macro_features.get("unrate_6m_change")
+    yield_curve_level = macro_features.get("yield_curve_level")
+
+    if (
+        cpi_yoy is not None
+        and fedfunds_6m_change is not None
+        and cpi_yoy < 0.03
+        and fedfunds_6m_change <= 0
+    ):
+        return "SOFT_LANDING"
+
+    if (
+        fedfunds_6m_change is not None
+        and cpi_yoy is not None
+        and fedfunds_6m_change > 0
+        and cpi_yoy >= 0.03
+    ):
+        return "TIGHTENING_PRESSURE"
+
+    if unrate_6m_change is not None and unrate_6m_change > 0.3:
+        return "DEFENSIVE_GROWTH"
+
+    if yield_curve_level is not None and yield_curve_level < 0:
+        return "SELECTIVE_GROWTH"
+
+    return "BALANCED_EXPANSION"
+
+def build_match_explanation(match: dict) -> str:
+    features = match["features"]
+
+    return (
+        f"Similar Economic DNA based on total return {features['total_return']:.4f}, "
+        f"volatility {features['volatility']:.4f}, "
+        f"and max drawdown {features['max_drawdown']:.4f}."
+    )
+
+def format_api_matches(matches: list[dict]) -> list[dict]:
+    formatted = []
+
+    for item in matches:
+        score = round(distance_to_score(item["distance"]), 4)
+        formatted.append({
+            "ticker": item["ticker"],
+            "name": item["ticker"],
+            "score": score,
+            "regime_label": f"Economic DNA match ({item['matched_window']['start_date']} to {item['matched_window']['end_date']})",
+            "sector": "Unknown",
+            "explanation": build_match_explanation(item),
+            "matched_window": item["matched_window"],
+            "series": item["series"],
+            "stock_distance": round(item["stock_distance"], 4),
+            "macro_distance": round(item["macro_distance"], 4),
+            "features": item["features"],
+        })
+
+    return formatted
 
 def main(): 
     load_dotenv()  # Load environment variables from .env file
@@ -276,6 +404,17 @@ def main():
         start_date="2023-01-03",
         end_date="2023-04-03",
     )
+
+    matches = find_stock_feature_matches(
+        macro_df=df,
+        prices_df=prices_df,
+        hero_ticker="MSFT",
+        start_date="2023-01-03",
+        end_date="2023-04-03",
+    )
+
+    api_matches = format_api_matches(matches)
+    print(api_matches[:5])
 
     print(hero_dna)
 
