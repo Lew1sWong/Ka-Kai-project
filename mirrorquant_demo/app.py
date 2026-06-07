@@ -17,12 +17,21 @@ from mirrorquant_demo.economic_data import (
     load_prices as load_economic_prices,
     classify_macro_regime,
 )
+from mirrorquant_demo.social_data import (
+    build_hero_social_dna,
+    find_social_matches,
+    format_api_matches as format_social_api_matches,
+    load_social_profiles,
+    load_social_signals,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = BASE_DIR / "static"
 PRICES_PATH = DATA_DIR / "prices.csv"
 MARKET_WATCH_PRICES_PATH = DATA_DIR / "market_watch_prices.csv"
+SOCIAL_PROFILES_PATH = DATA_DIR / "social_profiles.json"
+SOCIAL_SIGNALS_PATH = DATA_DIR / "social_signals.csv"
 
 Mode = Literal["price_dna", "economic_dna", "social_dna"]
 MARKET_WATCH_SYMBOLS = {
@@ -292,6 +301,54 @@ async def get_mirrors(
             },
             "matches": api_matches[:5],
             "search_backend": "economic_live",
+        }
+
+    if mode == "social_dna":
+        prices_df = load_economic_prices(str(DATA_DIR / "prices.csv"))
+        profiles = load_social_profiles(SOCIAL_PROFILES_PATH)
+        signals_df = load_social_signals(SOCIAL_SIGNALS_PATH)
+
+        try:
+            matches = find_social_matches(
+                prices_df=prices_df,
+                profiles=profiles,
+                hero_ticker=normalized,
+                start_date=selected_start,
+                end_date=selected_end,
+                signals_df=signals_df,
+            )
+            hero_dna = build_hero_social_dna(
+                prices_df=prices_df,
+                profiles=profiles,
+                ticker=normalized,
+                start_date=selected_start,
+                end_date=selected_end,
+                signals_df=signals_df,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        live_hero = dict(hero)
+        live_hero["social_dna"] = {
+            "regime_code": hero_dna["regime_code"],
+            "confidence": round(
+                1 / (1 + (matches[0]["distance"] if matches else 1.0)),
+                2,
+            ),
+            "traits": hero_dna["traits"],
+        }
+
+        return {
+            "ticker": normalized,
+            "mode": mode,
+            "hero": live_hero,
+            "hero_regime_code": hero_dna["regime_code"],
+            "selected_window": {
+                "start_date": selected_start,
+                "end_date": selected_end,
+            },
+            "matches": format_social_api_matches(matches)[:5],
+            "search_backend": "social_live" if not signals_df.empty else "social_mvp",
         }
 
     if mode != "price_dna":
