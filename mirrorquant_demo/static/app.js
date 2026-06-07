@@ -318,7 +318,16 @@ function backendLabel(searchMode) {
   if (searchMode === "mock") {
     return "Curated Demo Layer";
   }
-  return "Loading...";
+  if (searchMode === "economic_live") {
+    return "Live Macro + Price Factors";
+  }
+  if (searchMode === "social_mvp") {
+    return "Proxy Social Signal Blend";
+  }
+  if (searchMode === "social_live") {
+    return "Finnhub + NewsAPI + FinBERT";
+  }
+  return "Live Search";
 }
 
 function confidenceTone(score) {
@@ -369,6 +378,12 @@ function renderHero(
     ? `<p class="meta">Using trained VQ-VAE Price DNA encoding.</p>`
     : searchMode === "mock"
       ? `<p class="meta">Using curated demo matches for this mode.</p>`
+      : searchMode === "economic_live"
+        ? `<p class="meta">Using live macro plus price-window factor matching.</p>`
+        : searchMode === "social_live"
+          ? `<p class="meta">Using Finnhub company news, NewsAPI article discovery, and FinBERT sentiment scoring aggregated into daily social signals.</p>`
+        : searchMode === "social_mvp"
+          ? `<p class="meta">Using local Social DNA proxy signals built from ticker narrative profiles and price-persistence features.</p>`
       : "";
   const heroChart = buildHeroChartModel(heroSeries?.series || [], selectedWindow, effectiveWindow);
   const historyLabel = heroSeries?.available_start_date && heroSeries?.available_end_date

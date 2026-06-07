@@ -13,13 +13,15 @@ The repo now contains a working single-page demo in [`mirrorquant_demo/`](/abs/p
 - a FastAPI backend
 - a dark quant-terminal-style dashboard
 - a real `Price DNA` path powered by a trained VQ-VAE
-- curated fallback demo data for `Economic DNA` and `Social DNA`
+- a live factor-search path for `Economic DNA`
+- an MVP `Social DNA` path powered by local proxy social signals
 - user-selectable hero windows via start and end date inputs
 
 The app mixes real and mock layers on purpose:
 
 - `Price DNA` uses the trained VQ-VAE pipeline
-- `Economic DNA` and `Social DNA` still use curated demo results from JSON
+- `Economic DNA` uses live macro plus price-window features
+- `Social DNA` uses local ticker narrative profiles blended with price-persistence features
 - `Market Watch` and `Industry Chain` remain demo data
 
 ## Demo Folder Layout
@@ -324,13 +326,16 @@ You should re-encode windows when:
 - custom hero window input
 - VQ-VAE training pipeline
 - VQ-VAE embedding search for `Price DNA`
+- live factor search for `Economic DNA`
 
 ### Mock / curated
 
-- `Economic DNA`
-- `Social DNA`
 - market watch values
 - industry chain relationships
+
+### MVP / proxy
+
+- `Social DNA`
 
 ## Best Demo Flow
 
@@ -351,7 +356,7 @@ You can describe it like this:
 
 If someone asks whether the AI is real:
 
-> Price DNA is powered by a trained VQ-VAE over rolling price-volume windows. Economic DNA and Social DNA are currently curated demo layers while the full multi-modal stack is still being built.
+> Price DNA is powered by a trained VQ-VAE over rolling price-volume windows. Economic DNA uses live macro plus price-window factor matching, and Social DNA is now an MVP proxy layer built from local narrative profiles and price-persistence features.
 
 ## Technical Summary
 
@@ -385,6 +390,44 @@ If someone asks whether the AI is real:
 - richer vector search and ranking logic
 - realtime refresh jobs
 - portfolio-level analog search
+
+## Social DNA With Finnhub, NewsAPI, and FinBERT
+
+The repo now includes an end-to-end Social DNA ingestion script:
+
+[`mirrorquant_demo/fetch_social_signals.py`](/abs/path/c:/Users/cheng/Desktop/Hand-drawn-agent/mirrorquant_demo/fetch_social_signals.py:1)
+
+It uses:
+
+- Finnhub `company-news` for symbol-linked company articles
+- NewsAPI `/v2/everything` for broader article discovery
+- `ProsusAI/finbert` from Hugging Face for financial sentiment scoring
+
+Set credentials in `.env`:
+
+```env
+FINNHUB_API_KEY=your_key_here
+NEWSAPI_API_KEY=your_key_here
+```
+
+Install dependencies if needed:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then fetch and score social signals:
+
+```bash
+python mirrorquant_demo/fetch_social_signals.py --start 2023-01-01 --end 2026-05-21
+```
+
+Outputs:
+
+- `mirrorquant_demo/data/social_news.json`
+- `mirrorquant_demo/data/social_signals.csv`
+
+If `social_signals.csv` exists, the app will use the live Social DNA backend automatically. If it does not exist, the app falls back to the local proxy Social DNA profile layer.
 
 ## License
 
