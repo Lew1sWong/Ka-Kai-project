@@ -824,3 +824,61 @@ button:disabled {
     text-align: left;
   }
 }
+
+.control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+}
+
+.secondary-button {
+  background: transparent;
+  border: 1px solid rgba(116, 215, 167, 0.35);
+  box-shadow: none;
+}
+
+.secondary-button:hover {
+  background: rgba(116, 215, 167, 0.12);
+}
+
+.context-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.history-grid {
+  margin-top: 22px;
+}
+
+.saved-collection {
+  display: grid;
+  gap: 12px;
+}
+
+.saved-item {
+  width: 100%;
+  text-align: left;
+  border-radius: 16px;
+  background: rgba(11, 18, 26, 0.92);
+  border: 1px solid rgba(116, 215, 167, 0.14);
+  padding: 15px 16px;
+  box-shadow: none;
+}
+
+.saved-item:hover {
+  border-color: rgba(116, 215, 167, 0.4);
+}
+
+.saved-item.is-active {
+  border-color: rgba(116, 215, 167, 0.75);
+  box-shadow: 0 0 0 1px rgba(116, 215, 167, 0.18);
+}
+
+.saved-item strong,
+.saved-item span,
+.saved-item p {
+  display: block;
+}

@@ -1,9 +1,14 @@
-const heroSelect = document.getElementById("hero-select");
+const tickerInput = document.getElementById("ticker-input");
+const titleInput = document.getElementById("title-input");
 const modeSelect = document.getElementById("mode-select");
 const startDateInput = document.getElementById("start-date");
 const endDateInput = document.getElementById("end-date");
-const findButton = document.getElementById("find-button");
+const createHeroButton = document.getElementById("create-hero-button");
+const runSearchButton = document.getElementById("run-search-button");
+const heroStatus = document.getElementById("hero-status");
 
+const savedHeroesPanel = document.getElementById("saved-heroes");
+const searchRunsPanel = document.getElementById("search-runs");
 const heroCard = document.getElementById("hero-card");
 const marketWatch = document.getElementById("market-watch");
 const matchesPanel = document.getElementById("matches");
@@ -14,9 +19,12 @@ const searchBackend = document.getElementById("search-backend");
 const heroRegime = document.getElementById("hero-regime");
 const effectiveWindowLabel = document.getElementById("effective-window");
 
-let heroes = [];
+let savedHeroes = [];
+let currentHero = null;
+let currentSearchRun = null;
+let currentSearchRuns = [];
 
-function traitPills(traits) {
+function traitPills(traits = []) {
   return traits.map((trait) => `<span class="pill">${trait}</span>`).join("");
 }
 
@@ -315,9 +323,6 @@ function backendLabel(searchMode) {
   if (searchMode === "vqvae") {
     return "Trained VQ-VAE";
   }
-  if (searchMode === "mock") {
-    return "Curated Demo Layer";
-  }
   if (searchMode === "economic_live") {
     return "Live Macro + Price Factors";
   }
@@ -343,56 +348,88 @@ function confidenceTone(score) {
   return "Weak";
 }
 
-function setLoadingState(isLoading) {
-  findButton.disabled = isLoading;
-  findButton.textContent = isLoading ? "Scanning..." : "Find Mirrors";
+function formatDateTime(value) {
+  if (!value) {
+    return "";
+  }
+  return new Date(value).toLocaleString();
 }
 
-function renderSummary(hero, mode, matchData) {
-  const dna = hero[mode];
+function buildHeroIdentity(hero) {
+  if (!hero) {
+    return "No hero selected";
+  }
+  if (hero.name && hero.name !== hero.ticker) {
+    return `${hero.name} (${hero.ticker})`;
+  }
+  return hero.ticker;
+}
+
+function setHeroStatus(message) {
+  heroStatus.textContent = message;
+}
+
+function setLoadingState(action, isLoading) {
+  createHeroButton.disabled = isLoading;
+  runSearchButton.disabled = isLoading;
+
+  if (action === "create") {
+    createHeroButton.textContent = isLoading ? "Saving..." : "Save Hero";
+  }
+  if (action === "run") {
+    runSearchButton.textContent = isLoading ? "Running..." : "Run Search";
+  }
+}
+
+function renderIdleSummary(hero = null) {
+  activeMode.textContent = "Awaiting run";
+  searchBackend.textContent = hero ? "Ready to search" : "No active hero";
+  heroRegime.textContent = hero ? hero.ticker : "N/A";
+  effectiveWindowLabel.textContent = hero
+    ? `${hero.start_date} to ${hero.end_date}`
+    : "N/A";
+}
+
+function renderSummary(mode, matchData) {
+  const dna = matchData.hero?.[mode] || {};
   const effectiveWindow = matchData.effective_hero_window;
   const selectedWindow = matchData.selected_window;
 
   activeMode.textContent = modeLabel(mode);
   searchBackend.textContent = backendLabel(matchData.search_backend);
-  heroRegime.textContent = matchData.hero_regime_code || dna.regime_code;
+  heroRegime.textContent = matchData.hero_regime_code || dna.regime_code || "N/A";
   effectiveWindowLabel.textContent = effectiveWindow
     ? `${effectiveWindow.start_date} to ${effectiveWindow.end_date}`
     : `${selectedWindow.start_date} to ${selectedWindow.end_date}`;
 }
 
-function renderHero(
-  hero,
-  mode,
-  selectedWindow,
-  effectiveWindow = null,
-  searchMode = null,
-  heroSeries = null,
-) {
-  const dna = hero[mode];
+function renderHero(hero, mode, selectedWindow, effectiveWindow = null, searchMode = null, heroSeries = null) {
+  const dna = hero?.[mode] || { confidence: 0, regime_code: "N/A", traits: [] };
   const requestedLabel = `${selectedWindow.start_date} to ${selectedWindow.end_date}`;
   const encodedLabel = effectiveWindow
     ? `${effectiveWindow.start_date} to ${effectiveWindow.end_date} (${effectiveWindow.window_size} trading-day model window)`
     : requestedLabel;
   const backendNote = searchMode === "vqvae"
     ? `<p class="meta">Using trained VQ-VAE Price DNA encoding.</p>`
-    : searchMode === "mock"
-      ? `<p class="meta">Using curated demo matches for this mode.</p>`
-      : searchMode === "economic_live"
-        ? `<p class="meta">Using live macro plus price-window factor matching.</p>`
-        : searchMode === "social_live"
-          ? `<p class="meta">Using Finnhub company news, NewsAPI article discovery, and FinBERT sentiment scoring aggregated into daily social signals.</p>`
+    : searchMode === "economic_live"
+      ? `<p class="meta">Using live macro plus price-window factor matching.</p>`
+      : searchMode === "social_live"
+        ? `<p class="meta">Using Finnhub company news, NewsAPI article discovery, and FinBERT sentiment scoring aggregated into daily social signals.</p>`
         : searchMode === "social_mvp"
           ? `<p class="meta">Using local Social DNA proxy signals built from ticker narrative profiles and price-persistence features.</p>`
-      : "";
+          : "";
   const heroChart = buildHeroChartModel(heroSeries?.series || [], selectedWindow, effectiveWindow);
   const historyLabel = heroSeries?.available_start_date && heroSeries?.available_end_date
     ? `${heroSeries.available_start_date} to ${heroSeries.available_end_date}`
     : requestedLabel;
+  const confidencePercent = typeof dna.confidence === "number"
+    ? `${Math.round(dna.confidence * 100)}%`
+    : "N/A";
 
   heroCard.innerHTML = `
     <div class="card hero-card">
-      <h3>${hero.name} (${hero.ticker})</h3>
+      <h3>${buildHeroIdentity(hero)}</h3>
+      <p class="meta">${hero.title || hero.window_label || "Saved hero window"}</p>
       <div class="hero-chart-shell">
         ${heroChart.svg}
         <div id="hero-chart-tooltip" class="hero-chart-tooltip" hidden></div>
@@ -403,21 +440,56 @@ function renderHero(
       </div>
       <p class="meta">Selected window: ${requestedLabel}</p>
       <p class="meta">Available history: ${historyLabel}</p>
-      <p>${hero.summary}</p>
-      <p><strong>${hero.window_label}</strong></p>
+      <p>${hero.summary || "User-defined hero window."}</p>
       <div class="metric-row">
         <div>
           <span class="mini-label">Confidence</span>
-          <p class="score">${Math.round(dna.confidence * 100)}%</p>
+          <p class="score">${confidencePercent}</p>
         </div>
         <div>
           <span class="mini-label">Regime Code</span>
-          <p class="metric-value">${dna.regime_code}</p>
+          <p class="metric-value">${dna.regime_code || "N/A"}</p>
         </div>
       </div>
       <p class="meta">Encoded slice: ${encodedLabel}</p>
       ${backendNote}
-      <div>${traitPills(dna.traits)}</div>
+      <div>${traitPills(dna.traits || [])}</div>
+    </div>
+  `;
+
+  attachHeroChartInteractions(heroChart);
+}
+
+function renderHeroDraft(hero, heroSeries = null) {
+  if (!hero) {
+    heroCard.innerHTML = `<div class="card"><p>Save a hero window to get started.</p></div>`;
+    return;
+  }
+
+  const selectedWindow = {
+    start_date: hero.start_date,
+    end_date: hero.end_date,
+  };
+  const heroChart = buildHeroChartModel(heroSeries?.series || [], selectedWindow, null);
+  const historyLabel = heroSeries?.available_start_date && heroSeries?.available_end_date
+    ? `${heroSeries.available_start_date} to ${heroSeries.available_end_date}`
+    : `${hero.start_date} to ${hero.end_date}`;
+
+  heroCard.innerHTML = `
+    <div class="card hero-card">
+      <h3>${buildHeroIdentity(hero)}</h3>
+      <p class="meta">${hero.title || "Saved hero window"}</p>
+      <div class="hero-chart-shell">
+        ${heroChart.svg}
+        <div id="hero-chart-tooltip" class="hero-chart-tooltip" hidden></div>
+      </div>
+      <div class="hero-chart-legend">
+        <span><i class="legend-swatch legend-swatch-selected"></i>Selected window</span>
+      </div>
+      <p class="meta">Selected window: ${hero.start_date} to ${hero.end_date}</p>
+      <p class="meta">Available history: ${historyLabel}</p>
+      <p>${hero.summary || "User-defined hero window."}</p>
+      <p class="meta">Run a DNA search to generate a saved result snapshot.</p>
     </div>
   `;
 
@@ -453,6 +525,11 @@ function renderMarketWatch(data) {
 }
 
 function renderMatches(items) {
+  if (!items?.length) {
+    matchesPanel.innerHTML = `<div class="card"><p>No matches saved for this run yet.</p></div>`;
+    return;
+  }
+
   matchesPanel.innerHTML = items.map((item, index) => {
     const scorePct = Math.round(item.score * 100);
     const chartSvg = item.series?.length
@@ -469,7 +546,7 @@ function renderMatches(items) {
             <span class="rank-badge">#${index + 1}</span>
             <div>
               <h3>${item.name} (${item.ticker})</h3>
-              <p class="meta">${item.sector}</p>
+              <p class="meta">${item.sector || "Unknown"}</p>
             </div>
           </div>
           <div class="score-badge">
@@ -493,7 +570,17 @@ function renderMatches(items) {
   }).join("");
 }
 
-function renderIndustryChain(ticker, relationships) {
+function renderIndustryChain(ticker, relationships = []) {
+  if (!relationships.length) {
+    industryChain.innerHTML = `
+      <div class="card industry-card">
+        <h3>${ticker} industry map</h3>
+        <p class="meta">No saved relationship map exists for this ticker yet.</p>
+      </div>
+    `;
+    return;
+  }
+
   industryChain.innerHTML = `
     <div class="card industry-card">
       <h3>${ticker} industry map</h3>
@@ -518,79 +605,318 @@ function renderIndustryChain(ticker, relationships) {
   `;
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url);
+function renderSavedHeroes() {
+  if (!savedHeroes.length) {
+    savedHeroesPanel.innerHTML = `<div class="card"><p>No heroes saved yet. Create one from any ticker and date range.</p></div>`;
+    return;
+  }
+
+  savedHeroesPanel.innerHTML = `
+    <div class="saved-collection">
+      ${savedHeroes.map((hero) => `
+        <button
+          type="button"
+          class="saved-item ${currentHero?.id === hero.id ? "is-active" : ""}"
+          data-hero-id="${hero.id}"
+        >
+          <strong>${hero.title}</strong>
+          <span>${buildHeroIdentity(hero)}</span>
+          <p class="meta">${hero.start_date} to ${hero.end_date}</p>
+          <p class="meta">Updated ${formatDateTime(hero.updated_at)}</p>
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  savedHeroesPanel.querySelectorAll("[data-hero-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectHero(Number(button.dataset.heroId));
+    });
+  });
+}
+
+function renderSearchRuns() {
+  if (!currentHero) {
+    searchRunsPanel.innerHTML = `<div class="card"><p>Select a saved hero to view its search history.</p></div>`;
+    return;
+  }
+
+  if (!currentSearchRuns.length) {
+    searchRunsPanel.innerHTML = `<div class="card"><p>No saved searches for this hero yet. Run one to create a reusable result snapshot.</p></div>`;
+    return;
+  }
+
+  searchRunsPanel.innerHTML = `
+    <div class="saved-collection">
+      ${currentSearchRuns.map((run) => `
+        <button
+          type="button"
+          class="saved-item ${currentSearchRun?.id === run.id ? "is-active" : ""}"
+          data-run-id="${run.id}"
+        >
+          <strong>${modeLabel(run.mode)}</strong>
+          <span>${backendLabel(run.search_backend)}</span>
+          <p class="meta">${formatDateTime(run.created_at)}</p>
+          <p class="meta">${run.top_match ? `Top match: ${run.top_match.ticker} (${Math.round(run.top_match.score * 100)}%)` : "No top match saved"}</p>
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  searchRunsPanel.querySelectorAll("[data-run-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      loadSearchRun(Number(button.dataset.runId));
+    });
+  });
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let detail = `Request failed: ${response.status}`;
+    try {
+      const payload = await response.json();
+      detail = payload.detail || detail;
+    } catch (error) {
+      // Keep the default detail.
+    }
+    throw new Error(detail);
   }
   return response.json();
 }
 
-async function loadHeroes() {
-  const data = await fetchJson("/api/heroes");
-  heroes = data.heroes;
-  heroSelect.innerHTML = heroes.map((hero) => `
-    <option value="${hero.ticker}">${hero.name} (${hero.ticker})</option>
-  `).join("");
-  syncWindowInputs();
+async function postJson(url, payload) {
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
-function syncWindowInputs() {
-  const hero = heroes.find((item) => item.ticker === heroSelect.value) || heroes[0];
-  if (!hero) {
-    return;
-  }
+function syncFormWithHero(hero) {
+  tickerInput.value = hero.ticker;
+  titleInput.value = hero.title || "";
   startDateInput.value = hero.start_date;
   endDateInput.value = hero.end_date;
 }
 
-async function loadDashboard() {
-  const ticker = heroSelect.value;
-  const mode = modeSelect.value;
-  const hero = heroes.find((item) => item.ticker === ticker);
-  const startDate = startDateInput.value || hero.start_date;
-  const endDate = endDateInput.value || hero.end_date;
+function buildHeroPayloadFromForm() {
+  return {
+    ticker: tickerInput.value.trim().toUpperCase(),
+    title: titleInput.value.trim() || null,
+    start_date: startDateInput.value,
+    end_date: endDateInput.value,
+    notes: null,
+  };
+}
 
-  setLoadingState(true);
+function currentHeroDiffersFromForm() {
+  if (!currentHero) {
+    return true;
+  }
 
+  const payload = buildHeroPayloadFromForm();
+  return (
+    payload.ticker !== currentHero.ticker
+    || payload.title !== (currentHero.title || null)
+    || payload.start_date !== currentHero.start_date
+    || payload.end_date !== currentHero.end_date
+  );
+}
+
+async function fetchHeroSeries(hero) {
+  return fetchJson(
+    `/api/price-series?ticker=${hero.ticker}&start_date=${hero.start_date}&end_date=${hero.end_date}`,
+  );
+}
+
+async function loadIndustryChain(ticker) {
   try {
-    const [matchData, chainData, heroSeries] = await Promise.all([
-      fetchJson(`/api/mirrors?ticker=${ticker}&mode=${mode}&start_date=${startDate}&end_date=${endDate}`),
-      fetchJson(`/api/industry-chain/${ticker}`),
-      fetchJson(`/api/price-series?ticker=${ticker}&start_date=${startDate}&end_date=${endDate}`),
+    return await fetchJson(`/api/industry-chain/${ticker}`);
+  } catch (error) {
+    return { ticker, relationships: [] };
+  }
+}
+
+async function loadSavedHeroes(preferredHeroId = null) {
+  const data = await fetchJson("/api/heroes");
+  savedHeroes = data.heroes;
+  renderSavedHeroes();
+
+  if (!savedHeroes.length) {
+    currentHero = null;
+    currentSearchRun = null;
+    currentSearchRuns = [];
+    renderSearchRuns();
+    renderIdleSummary();
+    renderHeroDraft(null);
+    renderMatches([]);
+    renderIndustryChain("No hero", []);
+    setHeroStatus("No saved hero selected.");
+    return;
+  }
+
+  const heroToSelect = preferredHeroId
+    || currentHero?.id
+    || savedHeroes[0]?.id;
+
+  if (heroToSelect) {
+    await selectHero(heroToSelect);
+  }
+}
+
+async function selectHero(heroId) {
+  currentHero = await fetchJson(`/api/heroes/${heroId}`);
+  currentSearchRun = null;
+  syncFormWithHero(currentHero);
+  renderSavedHeroes();
+  setHeroStatus(`Active hero: ${currentHero.title}`);
+
+  const [searchRunData, heroSeries, chainData] = await Promise.all([
+    fetchJson(`/api/heroes/${heroId}/search-runs`),
+    fetchHeroSeries(currentHero),
+    loadIndustryChain(currentHero.ticker),
+  ]);
+
+  currentSearchRuns = searchRunData.search_runs;
+  renderSearchRuns();
+  renderIndustryChain(currentHero.ticker, chainData.relationships);
+
+  if (currentSearchRuns.length) {
+    await loadSearchRun(currentSearchRuns[0].id, heroSeries, chainData);
+    return;
+  }
+
+  renderIdleSummary(currentHero);
+  renderHeroDraft(currentHero, heroSeries);
+  renderMatches([]);
+}
+
+async function createHeroFromForm() {
+  const payload = buildHeroPayloadFromForm();
+  if (!payload.ticker || !payload.start_date || !payload.end_date) {
+    throw new Error("Ticker, start date, and end date are required.");
+  }
+
+  const hero = await postJson("/api/heroes", payload);
+  currentHero = hero;
+  currentSearchRun = null;
+  currentSearchRuns = [];
+  await loadSavedHeroes(hero.id);
+  return currentHero;
+}
+
+async function ensureCurrentHero() {
+  if (!currentHero || currentHeroDiffersFromForm()) {
+    return createHeroFromForm();
+  }
+  return currentHero;
+}
+
+async function loadSearchRun(searchRunId, heroSeries = null, chainData = null) {
+  const run = await fetchJson(`/api/search-runs/${searchRunId}`);
+  currentSearchRun = run;
+  renderSearchRuns();
+
+  if (!currentHero || currentHero.id !== run.hero_id) {
+    currentHero = await fetchJson(`/api/heroes/${run.hero_id}`);
+    renderSavedHeroes();
+  }
+
+  if (!heroSeries) {
+    heroSeries = await fetchHeroSeries(currentHero);
+  }
+  if (!chainData) {
+    chainData = await loadIndustryChain(currentHero.ticker);
+  }
+
+  modeSelect.value = run.mode;
+  renderSummary(run.mode, run);
+  renderHero(
+    run.hero,
+    run.mode,
+    run.selected_window,
+    run.effective_hero_window,
+    run.search_backend,
+    heroSeries,
+  );
+  renderMatches(run.matches);
+  renderIndustryChain(currentHero.ticker, chainData.relationships);
+}
+
+async function handleCreateHero() {
+  setLoadingState("create", true);
+  try {
+    const hero = await createHeroFromForm();
+    setHeroStatus(`Saved hero ${hero.title}.`);
+  } finally {
+    setLoadingState("create", false);
+  }
+}
+
+async function handleRunSearch() {
+  setLoadingState("run", true);
+  try {
+    const hero = await ensureCurrentHero();
+    const run = await postJson(`/api/heroes/${hero.id}/search-runs`, {
+      mode: modeSelect.value,
+    });
+    currentSearchRun = run;
+
+    const [searchRunData, heroSeries, chainData] = await Promise.all([
+      fetchJson(`/api/heroes/${hero.id}/search-runs`),
+      fetchHeroSeries(hero),
+      loadIndustryChain(hero.ticker),
     ]);
 
-    renderSummary(hero, mode, matchData);
+    currentSearchRuns = searchRunData.search_runs;
+    renderSearchRuns();
+    renderSummary(run.mode, run);
     renderHero(
-      hero,
-      mode,
-      matchData.selected_window,
-      matchData.effective_hero_window,
-      matchData.search_backend,
+      run.hero,
+      run.mode,
+      run.selected_window,
+      run.effective_hero_window,
+      run.search_backend,
       heroSeries,
     );
-    renderMatches(matchData.matches);
-    renderIndustryChain(ticker, chainData.relationships);
+    renderMatches(run.matches);
+    renderIndustryChain(hero.ticker, chainData.relationships);
+    setHeroStatus(`Saved ${modeLabel(run.mode)} search for ${hero.title}.`);
   } finally {
-    setLoadingState(false);
+    setLoadingState("run", false);
   }
 }
 
 async function init() {
-  await loadHeroes();
+  renderIdleSummary();
+  renderHeroDraft(null);
+  renderMatches([]);
+  renderSearchRuns();
+
   const watchData = await fetchJson("/api/market-watch");
   renderMarketWatch(watchData);
-  await loadDashboard();
+  await loadSavedHeroes();
 }
 
-findButton.addEventListener("click", loadDashboard);
-modeSelect.addEventListener("change", loadDashboard);
-heroSelect.addEventListener("change", () => {
-  syncWindowInputs();
-  loadDashboard();
+createHeroButton.addEventListener("click", () => {
+  handleCreateHero().catch((error) => {
+    console.error(error);
+    setHeroStatus(error.message);
+  });
+});
+
+runSearchButton.addEventListener("click", () => {
+  handleRunSearch().catch((error) => {
+    console.error(error);
+    setHeroStatus(error.message);
+  });
 });
 
 init().catch((error) => {
   console.error(error);
-  matchesPanel.innerHTML = `<div class="card"><p>Failed to load demo data.</p></div>`;
+  setHeroStatus(error.message);
+  matchesPanel.innerHTML = `<div class="card"><p>Failed to load MirrorQuant.</p></div>`;
 });
