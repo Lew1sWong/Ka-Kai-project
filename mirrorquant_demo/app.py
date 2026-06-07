@@ -292,7 +292,6 @@ async def get_mirrors(
             },
             "matches": api_matches[:5],
             "search_backend": "economic_live",
-            "hero_dna_debug": hero_dna,
         }
 
     if mode != "price_dna":

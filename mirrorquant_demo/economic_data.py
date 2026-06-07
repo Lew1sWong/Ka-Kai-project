@@ -275,9 +275,6 @@ def find_stock_feature_matches(
     hero_features = build_stock_window_features(hero_window)
     hero_macro = build_macro_features(macro_df, end_date)
 
-    latest_macro_date = macro_df["date"].max().strftime("%Y-%m-%d")
-    current_macro = build_macro_features(macro_df, latest_macro_date)
-
     window_size = len(hero_window)
 
     matches = []
@@ -287,12 +284,18 @@ def find_stock_feature_matches(
             continue # Skip the hero stock itself
 
         candidate_window = get_latest_price_window(prices_df, ticker, window_size)
+        
         if candidate_window.empty: 
             continue # Skip if we don't have enough data for this candidate
-
+        
         candidate_features = build_stock_window_features(candidate_window)
+
+        candidate_end_date = candidate_window["date"].iloc[-1].strftime("%Y-%m-%d")
+        candidate_macro = build_macro_features(macro_df, candidate_end_date)
+        
         stock_distance = stock_feature_distance(hero_features, candidate_features)
-        macro_distance = macro_feature_distance(hero_macro, current_macro)
+        macro_distance = macro_feature_distance(hero_macro, candidate_macro)
+        
         combined_distance = (0.7 * stock_distance) + (0.3 * macro_distance) # Weighted average of stock and macro distances, giving more weight to stock features
 
         matches.append({
@@ -358,11 +361,30 @@ def classify_macro_regime(macro_features: dict) -> str:
 
 def build_match_explanation(match: dict) -> str:
     features = match["features"]
+    stock_distance = match["stock_distance"] 
+    macro_distance = match["macro_distance"]
+
+    stock_text = (
+        "very similar stock behavior"
+        if stock_distance < 0.5
+        else "moderately similar stock behavior"
+        if stock_distance < 0.35
+        else "looser stock behavior similarity"
+    )
+
+    macro_text = (
+        "strong macro regime alignment"
+        if macro_distance < 0.15
+        else "moderate macro regime alignment"
+        if macro_distance < 0.3 
+        else "weaker macro regime alignment"
+    )
 
     return (
-        f"Similar Economic DNA based on total return {features['total_return']:.4f}, "
+        f"{stock_text} with {macro_text}. "
+        f"Total return {features['total_return']:.4f}, "
         f"volatility {features['volatility']:.4f}, "
-        f"and max drawdown {features['max_drawdown']:.4f}."
+        f"max drawdown {features['max_drawdown']:.4f}."
     )
 
 def format_api_matches(matches: list[dict]) -> list[dict]:
