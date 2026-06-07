@@ -10,6 +10,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from mirrorquant_demo.vqvae_search import find_vqvae_mirrors
+from mirrorquant_demo.economic_data import (
+    build_hero_economic_dna,
+    find_stock_feature_matches,
+    format_api_matches,
+    load_prices as load_economic_prices,
+    classify_macro_regime,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -209,6 +216,83 @@ async def get_mirrors(
             status_code=400,
             detail="start_date must be on or before end_date",
         )
+    
+    if mode == "economic_dna":
+        prices_df = load_economic_prices(str(DATA_DIR / "prices.csv"))
+        macro_df = pd.read_csv(str(DATA_DIR / "macro_series.csv"), parse_dates=["date"])
+
+        matches = find_stock_feature_matches(
+            macro_df=macro_df,
+            prices_df=prices_df,
+            hero_ticker=normalized,
+            start_date=selected_start,
+            end_date=selected_end,
+        )
+
+        api_matches = format_api_matches(matches)
+
+        hero_dna = build_hero_economic_dna(
+            macro_df=macro_df,
+            prices_df=prices_df,
+            ticker=normalized,
+            start_date=selected_start,
+            end_date=selected_end,
+        )
+
+        live_hero = dict(hero)
+        macro_features = hero_dna["macro_features"]
+        stock_features = hero_dna["stock_features"]
+        regime_code = classify_macro_regime(macro_features)
+
+        traits = []
+
+        if macro_features.get("cpi_yoy") is not None:
+            traits.append(
+                "Cooling inflation" if macro_features["cpi_yoy"] < 0.03 else "Elevated inflation"
+            )
+
+        if macro_features.get("fedfunds_6m_change") is not None:
+            traits.append(
+                "Falling rate pressure"
+                if macro_features["fedfunds_6m_change"] <= 0
+                else "Rising rate pressure"
+            )
+
+        if stock_features.get("max_drawdown") is not None:
+            traits.append(
+                "Controlled drawdown"
+                if stock_features["max_drawdown"] > -0.08
+                else "Deep drawdown risk"
+            )
+
+        if stock_features.get("total_return") is not None and len(traits) < 3:
+            traits.append(
+                "Positive return profile"
+                if stock_features["total_return"] > 0
+                else "Negative return profile"
+            )
+
+        live_hero["economic_dna"] = {
+            "regime_code": regime_code,
+            "confidence": round(
+                1 / (1 + (matches[0]["distance"] if matches else 1.0)),
+                2,
+            ),
+            "traits": traits[:3],
+        }
+
+        return {
+            "ticker": normalized,
+            "mode": mode,
+            "hero": live_hero,
+            "hero_regime_code": regime_code,
+            "selected_window": {
+                "start_date": selected_start,
+                "end_date": selected_end,
+            },
+            "matches": api_matches[:5],
+            "search_backend": "economic_live",
+        }
 
     if mode != "price_dna":
         matches = _load_json("mirror_matches.json")
@@ -281,7 +365,6 @@ async def get_mirrors(
         },
         "search_backend": "vqvae",
     }
-
 
 @app.get("/api/market-watch")
 async def get_market_watch():
