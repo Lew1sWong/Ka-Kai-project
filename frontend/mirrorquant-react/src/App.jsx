@@ -820,6 +820,20 @@ function App() {
     }
   }
 
+  async function handleArchiveHero() {
+    if (!currentHero) {
+      setHeroStatus("Select a hero before archiving."); 
+    }
+
+    try {
+      await postJson(`/api/heroes/${currentHero.id}/archive`);
+      await loadSavedHeroes(); 
+      setHeroStatus(`Archived hero ${currentHero.title || buildHeroIdentity(currentHero)}.`)
+    } catch (error) {
+      setHeroStatus(error.message);
+    }
+  }
+
   const summaryMode = currentSearchRun ? modeLabel(currentSearchRun.mode) : "Awaiting run";
   const summaryBackend = currentSearchRun
     ? backendLabel(currentSearchRun.search_backend)
@@ -1117,6 +1131,14 @@ function App() {
               </button>
               <button id="run-search-button" type="button" className="secondary-button" disabled={loadingCreate || loadingRun} onClick={handleRunSearch}>
                 {loadingRun ? "Running..." : "Run Search"}
+              </button>
+              <button 
+                type="button"
+                className="archive-button"
+                disabled={loadingCreate || loadingRun || !currentHero}
+                onClick={handleArchiveHero}
+              >
+                Archive Hero
               </button>
               <p className="context-text">{heroStatus}</p>
             </div>
