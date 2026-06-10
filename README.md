@@ -6,29 +6,36 @@ Instead of screening by sector, valuation, or static ratios, MirrorQuant learns 
 
 The result is a new class of "Mirror" stocks that conventional screeners are likely to miss.
 
-## Current Demo Status
+## Current Product Status
 
-The repo now contains a working single-page demo in [`mirrorquant_demo/`](/abs/path/c:/Users/cheng/Desktop/Hand-drawn-agent/mirrorquant_demo) with:
+The repo now contains a working product-style MirrorQuant app in [`mirrorquant_demo/`](/abs/path/c:/Users/cheng/Desktop/Hand-drawn-agent/mirrorquant_demo) with:
 
 - a FastAPI backend
+- a PostgreSQL-ready persistence layer for saved heroes and search runs
+- Alembic migration support
 - a dark quant-terminal-style dashboard
 - a real `Price DNA` path powered by a trained VQ-VAE
 - a live factor-search path for `Economic DNA`
-- an MVP `Social DNA` path powered by local proxy social signals
-- user-selectable hero windows via start and end date inputs
+- an MVP `Social DNA` path powered by local proxy and news-derived social signals
+- saved hero windows and saved search history
 
-The app mixes real and mock layers on purpose:
+The app still has a hybrid architecture:
 
 - `Price DNA` uses the trained VQ-VAE pipeline
 - `Economic DNA` uses live macro plus price-window features
-- `Social DNA` uses local ticker narrative profiles blended with price-persistence features
-- `Market Watch` and `Industry Chain` remain demo data
+- `Social DNA` blends local narrative profiles with scored social/news signals
+- `Market Watch` can use live ETF proxy prices if `market_watch_prices.csv` exists
+- `Industry Chain` is still curated demo metadata
 
-## Demo Folder Layout
+## Project Layout
 
 ```text
 mirrorquant_demo/
   app.py
+  database.py
+  models.py
+  schemas.py
+  search_service.py
   build_training_data.py
   train_vqvae.py
   encode_windows.py
@@ -51,6 +58,10 @@ mirrorquant_demo/
     index.html
     styles.css
     app.js
+alembic/
+  env.py
+  versions/
+alembic.ini
 ```
 
 ## Install
@@ -60,6 +71,37 @@ mirrorquant_demo/
 
 ```bash
 pip install -r requirements.txt
+```
+
+## Database Setup
+
+MirrorQuant now expects schema changes to be managed through Alembic.
+
+Set your database URL in `.env` or your shell:
+
+```env
+MIRRORQUANT_DATABASE_URL=postgresql+psycopg://mirroruser:password@localhost:5432/mirrorquant
+```
+
+If you do not set a PostgreSQL URL, the app can still fall back to a local SQLite file for development, but the intended product path is PostgreSQL.
+
+Apply the current schema before starting the app:
+
+```bash
+python -m alembic upgrade head
+```
+
+Check the current migration revision if needed:
+
+```bash
+python -m alembic current
+```
+
+When you change SQLAlchemy models later, create and apply a new migration like this:
+
+```bash
+python -m alembic revision --autogenerate -m "describe your change"
+python -m alembic upgrade head
 ```
 
 ## Run The App
@@ -78,29 +120,37 @@ http://127.0.0.1:8000
 
 ## Main User Flow
 
-1. Select a hero stock.
-2. Choose a DNA mode.
-3. Optionally edit the `Start date` and `End date`.
-4. Click `Find Mirrors`.
-5. Review:
-   - selected hero window
-   - encoded model window
+1. Enter any ticker.
+2. Optionally enter a saved hero title.
+3. Choose the `Start date` and `End date`.
+4. Click `Save Hero`.
+5. Choose a DNA mode.
+6. Click `Run Search`.
+7. Review:
+   - saved hero window
+   - encoded model window for `Price DNA`
    - top mirror matches
    - market watch context
    - industry-chain explanation
+8. Reopen the hero later from `Saved Heroes`.
+9. Reopen prior runs later from `Search History`.
 
 Important note:
 
-- the **Selected window** is the date range the user asked for
-- the **Encoded window** is the exact model-sized slice used by the VQ-VAE
+- the **Saved hero window** is the date range the user chose
+- the **Encoded window** is the exact model-sized slice used by the VQ-VAE for `Price DNA`
 
 Because the current VQ-VAE was trained on fixed 40-day windows, the app encodes a 40-trading-day slice from the chosen hero range.
 
 ## API Endpoints
 
 - `GET /api/heroes`
-- `GET /api/mirrors?ticker=MSFT&mode=price_dna`
-- `GET /api/mirrors?ticker=MSFT&mode=price_dna&start_date=2023-01-03&end_date=2023-04-03`
+- `POST /api/heroes`
+- `GET /api/heroes/{hero_id}`
+- `GET /api/heroes/{hero_id}/search-runs`
+- `POST /api/heroes/{hero_id}/search-runs`
+- `GET /api/search-runs/{search_run_id}`
+- `GET /api/price-series?ticker=MSFT&start_date=2023-01-03&end_date=2023-04-03`
 - `GET /api/market-watch`
 - `GET /api/industry-chain/MSFT`
 - `GET /health`
@@ -323,6 +373,9 @@ You should re-encode windows when:
 ### Real
 
 - FastAPI backend
+- saved heroes and saved search runs
+- PostgreSQL-ready SQLAlchemy models
+- Alembic migration workflow
 - custom hero window input
 - VQ-VAE training pipeline
 - VQ-VAE embedding search for `Price DNA`
@@ -330,12 +383,15 @@ You should re-encode windows when:
 
 ### Mock / curated
 
-- market watch values
 - industry chain relationships
 
 ### MVP / proxy
 
 - `Social DNA`
+
+### Hybrid
+
+- `Market Watch` falls back to curated JSON but can use live ETF proxy prices if `market_watch_prices.csv` exists
 
 ## Best Demo Flow
 
@@ -363,13 +419,18 @@ If someone asks whether the AI is real:
 ### Frontend
 
 - single-page dashboard
-- custom hero window inputs
+- custom hero creation inputs
+- saved heroes sidebar
+- saved search history sidebar
 - sci-fi quant-terminal visual system
 
 ### Backend
 
 - `FastAPI`
-- JSON-backed demo metadata
+- `SQLAlchemy`
+- PostgreSQL-ready persistence layer
+- `Alembic` schema migrations
+- saved hero and search-run workflow
 - VQ-VAE search orchestration for `Price DNA`
 
 ### ML Pipeline
@@ -384,11 +445,11 @@ If someone asks whether the AI is real:
 
 ## Future Extensions
 
-- real macroeconomic feeds for `Economic DNA`
-- sentiment/news embeddings for `Social DNA`
-- longer-history or variable-length sequence models
+- real industry-chain data
+- user accounts and watchlists
+- alerts / background refresh jobs
 - richer vector search and ranking logic
-- realtime refresh jobs
+- longer-history or variable-length sequence models
 - portfolio-level analog search
 
 ## Social DNA With Finnhub, NewsAPI, and FinBERT

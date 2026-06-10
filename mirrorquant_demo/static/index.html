@@ -3,20 +3,244 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MirrorQuant Demo</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <title>MirrorQuant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260610-1" />
   </head>
-  <body>
-    <main class="page">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">AI-first fintech demo</p>
-          <h1>MirrorQuant</h1>
-          <p class="lede">
-            Discover stocks with the same hidden behavioral DNA as a breakout leader.
+  <body class="landing-active">
+    <div id="landing-shell" class="landing-shell">
+      <nav class="landing-nav">
+        <button class="landing-logo" type="button" data-scroll-target="top">
+          <span class="landing-logo-mark">MQ</span>
+          <span class="landing-logo-copy">
+            <strong>MirrorQuant</strong>
+            <small>Behavioral market DNA</small>
+          </span>
+        </button>
+        <div class="landing-nav-links">
+          <button type="button" data-scroll-target="capabilities">Capabilities</button>
+          <button type="button" data-scroll-target="workflow">Workflow</button>
+          <button type="button" data-scroll-target="launch">Launch</button>
+        </div>
+        <button id="landing-nav-enter" class="landing-nav-cta" type="button">Enter Platform</button>
+      </nav>
+
+      <div class="landing-ticker-wrap">
+        <div id="landing-ticker" class="landing-ticker-inner"></div>
+      </div>
+
+      <section id="top" class="landing-hero">
+        <div class="landing-copy fade-up">
+          <div class="landing-eyebrow">
+            <span class="landing-eyebrow-dot"></span>
+            Productized quant discovery workflow
+          </div>
+          <h1 class="landing-title">
+            Find stocks that express the same
+            <em>behavioral DNA</em>
+            as your best idea.
+          </h1>
+          <p class="landing-sub">
+            MirrorQuant lets you save any ticker window as a hero, run Price, Economic,
+            or Social DNA searches on demand, and come back later to the exact ranked
+            result snapshot that generated the idea.
+          </p>
+          <div class="landing-actions">
+            <button id="landing-enter-primary" class="landing-btn landing-btn-primary" type="button">
+              Open MirrorQuant
+            </button>
+            <button class="landing-btn landing-btn-ghost" type="button" data-scroll-target="workflow">
+              See how it works
+            </button>
+          </div>
+        </div>
+
+        <div class="landing-preview fade-up delay-2">
+          <div class="preview-card">
+            <div class="preview-header">
+              <div>
+                <div class="preview-label">Saved hero</div>
+                <div class="preview-title">MSFT · 2023-01-03 to 2023-04-03</div>
+                <div class="preview-note">Encoded through the Price DNA engine</div>
+              </div>
+              <div class="preview-badges">
+                <span class="preview-badge preview-badge-live">Price DNA</span>
+                <span class="preview-badge preview-badge-soft">Saved run</span>
+              </div>
+            </div>
+            <canvas id="landing-chart" class="preview-chart" aria-label="MirrorQuant landing chart"></canvas>
+            <div class="preview-stats">
+              <div class="preview-stat">
+                <label>Search modes</label>
+                <span>3 engines</span>
+              </div>
+              <div class="preview-stat">
+                <label>Model window</label>
+                <span>40 trading days</span>
+              </div>
+              <div class="preview-stat">
+                <label>Return shape</label>
+                <span>Breakout profile</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-metrics">
+        <div class="landing-metrics-inner">
+          <div class="landing-metric fade-up">
+            <div class="landing-metric-number">3</div>
+            <div class="landing-metric-label">DNA search engines</div>
+          </div>
+          <div class="landing-metric fade-up delay-1">
+            <div class="landing-metric-number">40D</div>
+            <div class="landing-metric-label">Learned VQ-VAE encoded window</div>
+          </div>
+          <div class="landing-metric fade-up delay-2">
+            <div class="landing-metric-number">Any</div>
+            <div class="landing-metric-label">Ticker and date range can become a hero</div>
+          </div>
+          <div class="landing-metric fade-up delay-3">
+            <div class="landing-metric-number">Saved</div>
+            <div class="landing-metric-label">Heroes, runs, and ranked matches persist</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="capabilities" class="landing-section">
+        <div class="landing-section-head fade-up">
+          <div>
+            <div class="landing-section-label">Platform capabilities</div>
+            <h2 class="landing-section-title">Built for discovery, recall, and explainability.</h2>
+          </div>
+          <p class="landing-section-sub">
+            MirrorQuant is not just a chart toy. It is a workflow for storing hero ideas,
+            running multiple search lenses, and reopening the exact evidence later.
           </p>
         </div>
-        <div class="hero-badge">
+
+        <div class="landing-feature-grid">
+          <article class="landing-feature-card fade-up">
+            <div class="landing-feature-icon">P</div>
+            <h3>Price DNA retrieval</h3>
+            <p>Use the trained VQ-VAE to match latent breakout behavior instead of screening only by sector labels.</p>
+          </article>
+          <article class="landing-feature-card fade-up delay-1">
+            <div class="landing-feature-icon">E</div>
+            <h3>Economic DNA context</h3>
+            <p>Compare a hero window against macro regime and stock-factor behavior to explain when the move made sense.</p>
+          </article>
+          <article class="landing-feature-card fade-up delay-2">
+            <div class="landing-feature-icon">S</div>
+            <h3>Social DNA layer</h3>
+            <p>Blend local narrative profiles with scored news and sentiment signals to capture attention, tone, and controversy.</p>
+          </article>
+          <article class="landing-feature-card fade-up">
+            <div class="landing-feature-icon">H</div>
+            <h3>Saved heroes</h3>
+            <p>Turn any ticker plus date range into a reusable hero window instead of being limited to prewritten showcase cases.</p>
+          </article>
+          <article class="landing-feature-card fade-up delay-1">
+            <div class="landing-feature-icon">R</div>
+            <h3>Search history</h3>
+            <p>Persist search runs and ranked matches so you can revisit the exact output that produced a prior idea.</p>
+          </article>
+          <article class="landing-feature-card fade-up delay-2">
+            <div class="landing-feature-icon">M</div>
+            <h3>Market framing</h3>
+            <p>Layer live or proxy market-watch context on top of search output so the match is anchored in current tape conditions.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="workflow" class="landing-workflow">
+        <div class="landing-workflow-copy fade-up">
+          <div class="landing-section-label">Core workflow</div>
+          <h2 class="landing-section-title">From hero idea to saved result in two API calls.</h2>
+          <p class="landing-section-sub">
+            The product flow is simple on purpose: create a hero, run a search mode,
+            then reopen the saved run later from history.
+          </p>
+          <div class="landing-checks">
+            <div><span>01</span> Save a hero from any ticker and date range.</div>
+            <div><span>02</span> Run Price, Economic, or Social DNA against that hero.</div>
+            <div><span>03</span> Reopen the exact ranked run from saved history.</div>
+          </div>
+        </div>
+
+        <div class="landing-code-card fade-up delay-2">
+          <div class="landing-code-line"><span class="landing-code-ln">1</span><span><span class="landing-code-kw">const</span> hero = <span class="landing-code-kw">await</span> api.post(<span class="landing-code-str">"/api/heroes"</span>, {</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">2</span><span>&nbsp;&nbsp;ticker: <span class="landing-code-str">"MSFT"</span>,</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">3</span><span>&nbsp;&nbsp;start_date: <span class="landing-code-str">"2023-01-03"</span>,</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">4</span><span>&nbsp;&nbsp;end_date: <span class="landing-code-str">"2023-04-03"</span></span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">5</span><span>});</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">6</span><span></span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">7</span><span><span class="landing-code-kw">const</span> run = <span class="landing-code-kw">await</span> api.post(</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">8</span><span>&nbsp;&nbsp;<span class="landing-code-str">`/api/heroes/${hero.id}/search-runs`</span>,</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">9</span><span>&nbsp;&nbsp;{ mode: <span class="landing-code-str">"price_dna"</span> }</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">10</span><span>);</span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">11</span><span></span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">12</span><span><span class="landing-code-cm">// reopen later:</span></span></div>
+          <div class="landing-code-line"><span class="landing-code-ln">13</span><span><span class="landing-code-kw">const</span> savedRun = <span class="landing-code-kw">await</span> api.get(<span class="landing-code-str">`/api/search-runs/${run.id}`</span>);</span></div>
+        </div>
+      </section>
+
+      <section id="launch" class="landing-cta-section fade-up">
+        <div class="landing-cta-box">
+          <div class="landing-eyebrow landing-eyebrow-inline">
+            <span class="landing-eyebrow-dot"></span>
+            Main dashboard included
+          </div>
+          <h2>Ready to open the search workspace?</h2>
+          <p>
+            Enter the platform to save hero windows, run DNA searches, inspect market context,
+            and reopen prior ranked results.
+          </p>
+          <div class="landing-actions landing-actions-centered">
+            <button id="landing-enter-secondary" class="landing-btn landing-btn-primary" type="button">
+              Enter MirrorQuant
+            </button>
+            <button class="landing-btn landing-btn-ghost" type="button" data-scroll-target="top">
+              Back to top
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="landing-footer">
+        <p>MirrorQuant turns saved hero windows into reusable market retrieval workflows.</p>
+        <div class="landing-footer-links">
+          <button type="button" data-scroll-target="capabilities">Capabilities</button>
+          <button type="button" data-scroll-target="workflow">Workflow</button>
+          <button id="landing-footer-enter" type="button">Open Platform</button>
+        </div>
+      </footer>
+    </div>
+
+    <main id="app-shell" class="page app-shell" hidden>
+      <section class="app-topbar panel">
+        <div>
+          <p class="app-eyebrow">MirrorQuant workspace</p>
+          <h2 class="app-shell-title">Saved heroes, search history, and live DNA retrieval.</h2>
+        </div>
+        <button id="return-to-landing" type="button" class="secondary-button">Back To Landing</button>
+      </section>
+
+      <section class="app-hero">
+        <div class="app-hero-copy">
+          <p class="app-eyebrow">AI-first fintech platform</p>
+          <h1 class="app-title">MirrorQuant</h1>
+          <p class="app-lede">
+            Save any hero window, run DNA searches on demand, and revisit the exact result snapshots later.
+          </p>
+        </div>
+        <div class="app-hero-badge">
           <span>Regime</span>
           <strong id="headline-regime">Loading...</strong>
         </div>
@@ -24,8 +248,12 @@
 
       <section class="panel controls">
         <div class="control-field">
-          <label for="hero-select">Hero stock</label>
-          <select id="hero-select"></select>
+          <label for="ticker-input">Ticker</label>
+          <input id="ticker-input" type="text" placeholder="AAPL" maxlength="16" />
+        </div>
+        <div class="control-field">
+          <label for="title-input">Hero title</label>
+          <input id="title-input" type="text" placeholder="Optional saved label" />
         </div>
         <div class="control-field">
           <label for="mode-select">DNA mode</label>
@@ -43,7 +271,32 @@
           <label for="end-date">End date</label>
           <input id="end-date" type="date" />
         </div>
-        <button id="find-button" type="button">Find Mirrors</button>
+        <div class="control-actions">
+          <button id="create-hero-button" type="button">Save Hero</button>
+          <button id="run-search-button" type="button" class="secondary-button">Run Search</button>
+          <p id="hero-status" class="context-text">No saved hero selected.</p>
+        </div>
+      </section>
+
+      <section class="grid history-grid">
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Saved Heroes</h2>
+              <p class="panel-kicker">Reusable ticker windows you can reopen and search again.</p>
+            </div>
+          </div>
+          <div id="saved-heroes" class="stack"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Search History</h2>
+              <p class="panel-kicker">Saved DNA runs and their top matches for the active hero.</p>
+            </div>
+          </div>
+          <div id="search-runs" class="stack"></div>
+        </article>
       </section>
 
       <section class="summary-band" aria-label="Active search summary">
@@ -70,7 +323,7 @@
           <div class="panel-header">
             <div>
               <h2>Hero Window</h2>
-              <p class="panel-kicker">The reference breakout profile we are trying to mirror.</p>
+              <p class="panel-kicker">The active saved reference window and its latest DNA snapshot.</p>
             </div>
           </div>
           <div id="hero-card" class="stack"></div>
@@ -108,6 +361,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20260610-1"></script>
   </body>
-  </html>
+</html>
