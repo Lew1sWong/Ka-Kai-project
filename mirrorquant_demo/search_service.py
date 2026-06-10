@@ -615,3 +615,13 @@ def seed_sample_heroes(session: Session) -> None:
             )
         except (LookupError, ValueError):
             session.rollback()
+
+def archive_hero(session: Session, hero_id: int) -> dict[str, Any]:
+    hero = session.get(Hero, hero_id)
+    if hero is None: 
+        raise LookupError(f"Hero {hero_id} was not found")
+    
+    hero.status = "archived"
+    session.commit()
+    session.refresh(hero)
+    return _hero_response(hero)

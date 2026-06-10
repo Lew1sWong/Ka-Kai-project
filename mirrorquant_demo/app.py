@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from mirrorquant_demo.database import SessionLocal, get_session, init_database
+from mirrorquant_demo.database import SessionLocal, get_session
 from mirrorquant_demo.schemas import HeroCreate, SearchRunCreate
 from mirrorquant_demo.search_service import (
     create_or_update_hero,
@@ -144,7 +144,6 @@ app = FastAPI(
 
 @app.on_event("startup")
 def startup():
-    init_database()
     with SessionLocal() as session:
         seed_sample_heroes(session)
 

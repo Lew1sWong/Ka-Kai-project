@@ -45,3 +45,9 @@ psycopg[binary]>=3.2.1
 # Optional market data providers
 alpaca-py
 moomoo-api
+
+# Data migration and management
+alembic>=1.13.0
+
+# Testing 
+pytest>=8.0.0

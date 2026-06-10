@@ -1,3 +1,19 @@
+const body = document.body;
+
+const landingShell = document.getElementById("landing-shell");
+const appShell = document.getElementById("app-shell");
+const landingTicker = document.getElementById("landing-ticker");
+const landingChart = document.getElementById("landing-chart");
+const landingEnterButtons = [
+  document.getElementById("landing-nav-enter"),
+  document.getElementById("landing-enter-primary"),
+  document.getElementById("landing-enter-secondary"),
+  document.getElementById("landing-footer-enter"),
+].filter(Boolean);
+const landingScrollButtons = Array.from(document.querySelectorAll("[data-scroll-target]"));
+const returnToLandingButton = document.getElementById("return-to-landing");
+const revealTargets = Array.from(document.querySelectorAll(".fade-up"));
+
 const tickerInput = document.getElementById("ticker-input");
 const titleInput = document.getElementById("title-input");
 const modeSelect = document.getElementById("mode-select");
@@ -19,10 +35,26 @@ const searchBackend = document.getElementById("search-backend");
 const heroRegime = document.getElementById("hero-regime");
 const effectiveWindowLabel = document.getElementById("effective-window");
 
+const landingTickerItems = [
+  "Save any ticker window as a hero",
+  "Price DNA powered by trained VQ-VAE retrieval",
+  "Economic DNA adds macro and factor context",
+  "Social DNA blends narrative and sentiment signals",
+  "Saved search runs preserve ranked evidence",
+  "Market watch keeps every run grounded in regime context",
+];
+
+const landingPreviewSeries = [
+  102, 104, 106, 105, 109, 114, 118, 121, 119, 123, 129, 136,
+];
+
 let savedHeroes = [];
 let currentHero = null;
 let currentSearchRun = null;
 let currentSearchRuns = [];
+let dashboardInitPromise = null;
+let dashboardEventsBound = false;
+let revealObserver = null;
 
 function traitPills(traits = []) {
   return traits.map((trait) => `<span class="pill">${trait}</span>`).join("");
@@ -630,7 +662,10 @@ function renderSavedHeroes() {
 
   savedHeroesPanel.querySelectorAll("[data-hero-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      selectHero(Number(button.dataset.heroId));
+      selectHero(Number(button.dataset.heroId)).catch((error) => {
+        console.error(error);
+        setHeroStatus(error.message);
+      });
     });
   });
 }
@@ -665,7 +700,10 @@ function renderSearchRuns() {
 
   searchRunsPanel.querySelectorAll("[data-run-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      loadSearchRun(Number(button.dataset.runId));
+      loadSearchRun(Number(button.dataset.runId)).catch((error) => {
+        console.error(error);
+        setHeroStatus(error.message);
+      });
     });
   });
 }
@@ -772,7 +810,7 @@ async function selectHero(heroId) {
   currentSearchRun = null;
   syncFormWithHero(currentHero);
   renderSavedHeroes();
-  setHeroStatus(`Active hero: ${currentHero.title}`);
+  setHeroStatus(`Active hero: ${currentHero.title || buildHeroIdentity(currentHero)}`);
 
   const [searchRunData, heroSeries, chainData] = await Promise.all([
     fetchJson(`/api/heroes/${heroId}/search-runs`),
@@ -850,7 +888,7 @@ async function handleCreateHero() {
   setLoadingState("create", true);
   try {
     const hero = await createHeroFromForm();
-    setHeroStatus(`Saved hero ${hero.title}.`);
+    setHeroStatus(`Saved hero ${hero.title || buildHeroIdentity(hero)}.`);
   } finally {
     setLoadingState("create", false);
   }
@@ -884,39 +922,231 @@ async function handleRunSearch() {
     );
     renderMatches(run.matches);
     renderIndustryChain(hero.ticker, chainData.relationships);
-    setHeroStatus(`Saved ${modeLabel(run.mode)} search for ${hero.title}.`);
+    setHeroStatus(`Saved ${modeLabel(run.mode)} search for ${hero.title || buildHeroIdentity(hero)}.`);
   } finally {
     setLoadingState("run", false);
   }
 }
 
-async function init() {
+function buildLandingTicker() {
+  if (!landingTicker) {
+    return;
+  }
+
+  const content = [...landingTickerItems, ...landingTickerItems]
+    .map((item) => `<span class="landing-ticker-item">${item}</span>`)
+    .join("");
+  landingTicker.innerHTML = content;
+}
+
+function drawLandingPreviewChart() {
+  if (!landingChart) {
+    return;
+  }
+
+  const rect = landingChart.getBoundingClientRect();
+  const width = Math.max(Math.round(rect.width), 320);
+  const height = Math.max(Math.round(rect.height), 220);
+  const ratio = window.devicePixelRatio || 1;
+
+  landingChart.width = width * ratio;
+  landingChart.height = height * ratio;
+
+  const context = landingChart.getContext("2d");
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.scale(ratio, ratio);
+  context.clearRect(0, 0, width, height);
+
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "rgba(87, 213, 176, 0.32)");
+  gradient.addColorStop(1, "rgba(87, 213, 176, 0.02)");
+
+  context.strokeStyle = "rgba(151, 180, 255, 0.12)";
+  context.lineWidth = 1;
+  for (let index = 0; index < 5; index += 1) {
+    const y = 20 + ((height - 40) / 4) * index;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+
+  const min = Math.min(...landingPreviewSeries);
+  const max = Math.max(...landingPreviewSeries);
+  const span = max - min || 1;
+  const leftPad = 10;
+  const rightPad = 10;
+  const topPad = 18;
+  const bottomPad = 24;
+  const usableWidth = width - leftPad - rightPad;
+  const usableHeight = height - topPad - bottomPad;
+
+  const points = landingPreviewSeries.map((value, index) => {
+    const x = leftPad + (usableWidth / (landingPreviewSeries.length - 1)) * index;
+    const y = topPad + ((max - value) / span) * usableHeight;
+    return { x, y };
+  });
+
+  context.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  });
+  context.lineTo(points[points.length - 1].x, height - bottomPad + 4);
+  context.lineTo(points[0].x, height - bottomPad + 4);
+  context.closePath();
+  context.fillStyle = gradient;
+  context.fill();
+
+  context.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) {
+      context.moveTo(point.x, point.y);
+    } else {
+      context.lineTo(point.x, point.y);
+    }
+  });
+  context.strokeStyle = "#66f0cb";
+  context.lineWidth = 3;
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  context.stroke();
+
+  const finalPoint = points[points.length - 1];
+  context.beginPath();
+  context.arc(finalPoint.x, finalPoint.y, 5, 0, Math.PI * 2);
+  context.fillStyle = "#f7fafc";
+  context.fill();
+  context.lineWidth = 2;
+  context.strokeStyle = "#66f0cb";
+  context.stroke();
+}
+
+function scrollToSection(targetId) {
+  const target = targetId === "top"
+    ? document.getElementById("top")
+    : document.getElementById(targetId);
+
+  if (!target) {
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setupRevealAnimations() {
+  revealTargets.forEach((element) => {
+    element.classList.remove("is-visible");
+  });
+
+  if (!("IntersectionObserver" in window)) {
+    revealTargets.forEach((element) => element.classList.add("is-visible"));
+    return;
+  }
+
+  revealObserver?.disconnect();
+  revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.18 });
+
+  revealTargets.forEach((element) => {
+    revealObserver.observe(element);
+  });
+}
+
+function setPlatformView(showApp) {
+  const isLandingActive = !showApp;
+  body.classList.toggle("landing-active", isLandingActive);
+  landingShell.hidden = !isLandingActive;
+  appShell.hidden = isLandingActive;
+}
+
+async function enterPlatform() {
+  setPlatformView(true);
+
+  if (!dashboardInitPromise) {
+    dashboardInitPromise = initDashboard();
+  }
+
+  try {
+    await dashboardInitPromise;
+  } catch (error) {
+    dashboardInitPromise = null;
+    throw error;
+  }
+}
+
+function showLanding() {
+  setPlatformView(false);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function bindDashboardEvents() {
+  if (dashboardEventsBound) {
+    return;
+  }
+
+  createHeroButton.addEventListener("click", () => {
+    handleCreateHero().catch((error) => {
+      console.error(error);
+      setHeroStatus(error.message);
+    });
+  });
+
+  runSearchButton.addEventListener("click", () => {
+    handleRunSearch().catch((error) => {
+      console.error(error);
+      setHeroStatus(error.message);
+    });
+  });
+
+  dashboardEventsBound = true;
+}
+
+async function initDashboard() {
+  bindDashboardEvents();
   renderIdleSummary();
   renderHeroDraft(null);
   renderMatches([]);
   renderSearchRuns();
+  setHeroStatus("Loading saved MirrorQuant workspace...");
 
   const watchData = await fetchJson("/api/market-watch");
   renderMarketWatch(watchData);
   await loadSavedHeroes();
 }
 
-createHeroButton.addEventListener("click", () => {
-  handleCreateHero().catch((error) => {
-    console.error(error);
-    setHeroStatus(error.message);
-  });
-});
+function setupLandingPage() {
+  buildLandingTicker();
+  drawLandingPreviewChart();
+  setupRevealAnimations();
 
-runSearchButton.addEventListener("click", () => {
-  handleRunSearch().catch((error) => {
-    console.error(error);
-    setHeroStatus(error.message);
+  landingEnterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      enterPlatform().catch((error) => {
+        console.error(error);
+        setHeroStatus(error.message);
+        matchesPanel.innerHTML = `<div class="card"><p>Failed to load MirrorQuant.</p></div>`;
+      });
+    });
   });
-});
 
-init().catch((error) => {
-  console.error(error);
-  setHeroStatus(error.message);
-  matchesPanel.innerHTML = `<div class="card"><p>Failed to load MirrorQuant.</p></div>`;
-});
+  landingScrollButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      scrollToSection(button.dataset.scrollTarget);
+    });
+  });
+
+  returnToLandingButton?.addEventListener("click", showLanding);
+  window.addEventListener("resize", drawLandingPreviewChart);
+}
+
+setupLandingPage();

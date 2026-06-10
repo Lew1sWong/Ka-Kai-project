@@ -48,9 +48,3 @@ def get_session():
         yield session
     finally:
         session.close()
-
-
-def init_database():
-    from mirrorquant_demo.models import MatchResult, Hero, SearchRun  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
