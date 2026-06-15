@@ -500,7 +500,7 @@ label,
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  align-items: end;
+  align-items: flex-end;
   margin-bottom: 26px;
 }
 
@@ -704,6 +704,13 @@ label,
   border-radius: 22px;
 }
 
+.app-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .app-shell-title {
   font-size: clamp(1.35rem, 3vw, 2rem);
 }
@@ -718,7 +725,7 @@ label,
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .app-title {
@@ -733,6 +740,42 @@ label,
   max-width: 640px;
   margin-bottom: 0;
   line-height: 1.65;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 28px 24px;
+}
+
+.auth-title {
+  margin: 8px 0 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.05;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.auth-error {
+  margin: 0;
+  color: #ff8e96;
+  font-size: 0.95rem;
 }
 
 .app-hero-badge {
@@ -788,7 +831,7 @@ label,
   grid-template-columns: 1.1fr 1fr 0.9fr 0.9fr 0.9fr;
   gap: 12px;
   padding: 16px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .control-field {

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 const API_BASE = (
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_BASE_URL)
   || ""
-).replace(/\/$/, "");
+).trim().replace(/\/$/, "");
+const REQUEST_TIMEOUT_MS = 8000;
 const landingTickerItems = [
   "Save any ticker window as a hero",
   "Price DNA powered by trained VQ-VAE retrieval",
@@ -57,7 +58,25 @@ function apiUrl(path) {
 }
 
 async function fetchJson(path, options = {}) {
-  const response = await fetch(apiUrl(path), options);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(apiUrl(path), {
+      credentials: "include",
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("MirrorQuant API timed out. Make sure the backend is running on http://127.0.0.1:8000.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
     let detail = `Request failed: ${response.status}`;
     try {
@@ -79,6 +98,18 @@ async function postJson(path, payload) {
     },
     body: JSON.stringify(payload),
   });
+}
+
+async function loginUser(payload) {
+  return postJson("/api/auth/login", payload);
+}
+
+async function logoutUser() {
+  return postJson("/api/auth/logout", {});
+}
+
+async function fetchCurrentUser() {
+  return fetchJson("/api/auth/me");
 }
 
 function traitPills(traits = []) {
@@ -610,6 +641,9 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   const [heroStatus, setHeroStatus] = useState("No saved hero selected.");
   const [loadingCreate, setLoadingCreate] = useState(false);
   const [loadingRun, setLoadingRun] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const [form, setForm] = useState({
     ticker: "",
     title: "",
@@ -617,7 +651,38 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
     start_date: "",
     end_date: "",
   });
+  const [loginForm, setLoginForm] = useState({
+    email: "",
+    password: "",
+  });
   const initPromiseRef = useRef(null);
+
+  function resetWorkspaceState() {
+    setSavedHeroes([]);
+    setCurrentHero(null);
+    setCurrentSearchRuns([]);
+    setCurrentSearchRun(null);
+    setHeroSeries(null);
+    setIndustryChain({ ticker: "No hero", relationships: [] });
+    setMarketWatch(null);
+    setHeroStatus("No saved hero selected.");
+    initPromiseRef.current = null;
+  }
+
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const data = await fetchCurrentUser();
+        setCurrentUser(data.user);
+      } catch (error) {
+        setCurrentUser(null);
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    loadCurrentUser();
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle("landing-active", !showApp);
@@ -625,7 +690,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   }, [showApp]);
 
   useEffect(() => {
-    if (initialView !== "workspace") {
+    if (initialView !== "workspace" || authLoading || !currentUser) {
       return;
     }
 
@@ -633,7 +698,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       setHeroStatus(error.message);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView]);
+  }, [initialView, authLoading, currentUser]);
 
   function syncFormWithHero(hero) {
     setForm((current) => ({
@@ -782,6 +847,9 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       return;
     }
     setShowApp(true);
+    if (!currentUser) {
+      return;
+    }
     if (!initPromiseRef.current) {
       initPromiseRef.current = initDashboard().catch((error) => {
         initPromiseRef.current = null;
@@ -792,6 +860,38 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       await initPromiseRef.current;
     } catch (error) {
       setHeroStatus(error.message);
+    }
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setAuthError("");
+
+    try {
+      const data = await loginUser(loginForm);
+      setCurrentUser(data.user);
+      setLoginForm({
+        email: loginForm.email,
+        password: "",
+      });
+    } catch (error) {
+      setAuthError(error.message);
+    }
+  }
+
+  async function handleLogout() {
+    setAuthError("");
+    try {
+      await logoutUser();
+    } catch {
+      // If logout fails, still clear local state so the user can recover.
+    } finally {
+      setCurrentUser(null);
+      resetWorkspaceState();
+      setLoginForm((current) => ({
+        ...current,
+        password: "",
+      }));
     }
   }
 
@@ -875,6 +975,71 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       : currentHero
         ? `${currentHero.start_date} to ${currentHero.end_date}`
         : "N/A";
+
+  if (showApp && authLoading) {
+    return (
+      <main className="page auth-shell">
+        <section className="panel auth-card">
+          <p className="app-eyebrow">MirrorQuant workspace</p>
+          <h1 className="auth-title">Checking your session...</h1>
+          <p className="panel-kicker">Loading your internal research workspace.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (showApp && !currentUser) {
+    return (
+      <main className="page auth-shell">
+        <section className="panel auth-card">
+          <p className="app-eyebrow">Internal Access</p>
+          <h1 className="auth-title">Log in to MirrorQuant</h1>
+          <p className="panel-kicker">
+            Use your internal account to open the saved hero workspace and search history.
+          </p>
+          <form className="auth-form" onSubmit={handleLogin}>
+            <div className="control-field">
+              <label htmlFor="login-email">Email</label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="local-dev@mirrorquant.app"
+                value={loginForm.email}
+                onChange={(event) =>
+                  setLoginForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="control-field">
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                placeholder="Enter password"
+                value={loginForm.password}
+                onChange={(event) =>
+                  setLoginForm((current) => ({
+                    ...current,
+                    password: event.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="auth-actions">
+              <button type="submit">Log in</button>
+              <button type="button" className="secondary-button" onClick={showLanding}>
+                Back To Landing
+              </button>
+            </div>
+            {authError ? <p className="auth-error">{authError}</p> : null}
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -1078,8 +1243,12 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
             <div>
               <p className="app-eyebrow">MirrorQuant workspace</p>
               <h2 className="app-shell-title">Saved heroes, search history, and live DNA retrieval.</h2>
+              {currentUser ? <p className="panel-kicker">Signed in as {currentUser.email}</p> : null}
             </div>
-            <button type="button" className="secondary-button" onClick={showLanding}>Back To Landing</button>
+            <div className="app-topbar-actions">
+              <button type="button" className="secondary-button" onClick={handleLogout}>Logout</button>
+              <button type="button" className="secondary-button" onClick={showLanding}>Back To Landing</button>
+            </div>
           </section>
 
           <section className="app-hero">
