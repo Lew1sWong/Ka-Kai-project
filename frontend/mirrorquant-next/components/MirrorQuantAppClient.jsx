@@ -104,6 +104,14 @@ async function loginUser(payload) {
   return postJson("/api/auth/login", payload);
 }
 
+async function registerUser(payload) {
+  return postJson("/api/auth/register", payload);
+}
+
+async function resendVerificationEmail() {
+  return postJson("/api/auth/resend-verification", {});
+}
+
 async function logoutUser() {
   return postJson("/api/auth/logout", {});
 }
@@ -643,7 +651,11 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   const [loadingRun, setLoadingRun] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState("login");
   const [authError, setAuthError] = useState("");
+  const [verificationNotice, setVerificationNotice] = useState("");
+  const [verificationLink, setVerificationLink] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
   const [form, setForm] = useState({
     ticker: "",
     title: "",
@@ -654,6 +666,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   const [loginForm, setLoginForm] = useState({
     email: "",
     password: "",
+    confirm_password: "",
   });
   const initPromiseRef = useRef(null);
 
@@ -690,7 +703,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   }, [showApp]);
 
   useEffect(() => {
-    if (initialView !== "workspace" || authLoading || !currentUser) {
+    if (initialView !== "workspace" || authLoading || !currentUser?.is_verified) {
       return;
     }
 
@@ -841,13 +854,14 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
     await loadSavedHeroes();
   }
 
-  async function enterPlatform() {
+  async function enterPlatform(nextUser = null) {
     if (onEnterPlatform) {
       onEnterPlatform();
       return;
     }
     setShowApp(true);
-    if (!currentUser) {
+    const activeUser = nextUser || currentUser;
+    if (!activeUser || !activeUser.is_verified) {
       return;
     }
     if (!initPromiseRef.current) {
@@ -863,24 +877,103 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
     }
   }
 
-  async function handleLogin(event) {
+  function switchAuthMode(nextMode) {
+    setAuthMode(nextMode);
+    setAuthError("");
+    setVerificationNotice("");
+    setVerificationLink("");
+    setLoginForm((current) => ({
+      ...current,
+      password: "",
+      confirm_password: "",
+    }));
+  }
+
+  async function handleAuthSubmit(event) {
     event.preventDefault();
     setAuthError("");
+    setVerificationNotice("");
+    setVerificationLink("");
 
     try {
-      const data = await loginUser(loginForm);
+      const payload = {
+        email: loginForm.email,
+        password: loginForm.password,
+      };
+      const data = authMode === "register"
+        ? await registerUser({
+          ...payload,
+          confirm_password: loginForm.confirm_password,
+        })
+        : await loginUser(payload);
       setCurrentUser(data.user);
+      if (authMode === "register") {
+        setVerificationNotice(
+          data.verification_delivery === "smtp"
+            ? "Verification email sent. Open your inbox, then come back here."
+            : "Verification email is in local dev mode. Use the link below to verify this account."
+        );
+        setVerificationLink(data.verification_url || "");
+      }
       setLoginForm({
         email: loginForm.email,
         password: "",
+        confirm_password: "",
       });
     } catch (error) {
       setAuthError(error.message);
     }
   }
 
+  async function handleRefreshSession() {
+    setVerificationLoading(true);
+    setAuthError("");
+    try {
+      const data = await fetchCurrentUser();
+      setCurrentUser(data.user);
+      if (data.user?.is_verified) {
+        setVerificationNotice("Email verified. Your workspace is ready.");
+        setVerificationLink("");
+        await enterPlatform(data.user);
+      } else {
+        setVerificationNotice("This account is still waiting for verification. Open the email link first, then try again.");
+      }
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setVerificationLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setVerificationLoading(true);
+    setAuthError("");
+    try {
+      const data = await resendVerificationEmail();
+      setCurrentUser(data.user);
+      if (data.already_verified) {
+        setVerificationNotice("This account is already verified.");
+        setVerificationLink("");
+        await enterPlatform(data.user);
+      } else {
+        setVerificationNotice(
+          data.verification_delivery === "smtp"
+            ? "Verification email sent again. Check your inbox."
+            : "Local dev verification link generated again. Open the link below."
+        );
+        setVerificationLink(data.verification_url || "");
+      }
+    } catch (error) {
+      setAuthError(error.message);
+    } finally {
+      setVerificationLoading(false);
+    }
+  }
+
   async function handleLogout() {
     setAuthError("");
+    setVerificationNotice("");
+    setVerificationLink("");
     try {
       await logoutUser();
     } catch {
@@ -891,6 +984,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       setLoginForm((current) => ({
         ...current,
         password: "",
+        confirm_password: "",
       }));
     }
   }
@@ -902,6 +996,10 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
     }
     setShowApp(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function scrollToWorkspaceSection(sectionId) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleCreateHero() {
@@ -975,6 +1073,15 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
       : currentHero
         ? `${currentHero.start_date} to ${currentHero.end_date}`
         : "N/A";
+  const heroCount = savedHeroes.length;
+  const runCount = currentSearchRuns.length;
+  const topMatch = currentSearchRun?.matches?.[0] || null;
+  const activeHeroLabel = currentHero ? buildHeroIdentity(currentHero) : "No hero selected";
+  const activeModeLabel = form.mode ? modeLabel(form.mode) : "Price DNA";
+  const regimeHeadline = marketWatch?.headline_regime || "Loading regime";
+  const topMatchLabel = topMatch
+    ? `${topMatch.ticker} ${Math.round(topMatch.score * 100)}%`
+    : "No saved match";
 
   if (showApp && authLoading) {
     return (
@@ -989,15 +1096,36 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   }
 
   if (showApp && !currentUser) {
+    const isRegisterMode = authMode === "register";
     return (
       <main className="page auth-shell">
         <section className="panel auth-card">
           <p className="app-eyebrow">Internal Access</p>
-          <h1 className="auth-title">Log in to MirrorQuant</h1>
+          <h1 className="auth-title">
+            {isRegisterMode ? "Create your MirrorQuant account" : "Log in to MirrorQuant"}
+          </h1>
           <p className="panel-kicker">
-            Use your internal account to open the saved hero workspace and search history.
+            {isRegisterMode
+              ? "Create an account to save hero windows, persist search runs, and reopen your workspace later."
+              : "Use your account to open the saved hero workspace and search history."}
           </p>
-          <form className="auth-form" onSubmit={handleLogin}>
+          <div className="auth-mode-toggle" role="tablist" aria-label="Authentication mode">
+            <button
+              type="button"
+              className={`auth-mode-button ${!isRegisterMode ? "is-active" : ""}`}
+              onClick={() => switchAuthMode("login")}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className={`auth-mode-button ${isRegisterMode ? "is-active" : ""}`}
+              onClick={() => switchAuthMode("register")}
+            >
+              Create account
+            </button>
+          </div>
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
             <div className="control-field">
               <label htmlFor="login-email">Email</label>
               <input
@@ -1028,14 +1156,75 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
                 }
               />
             </div>
+            {isRegisterMode ? (
+              <div className="control-field">
+                <label htmlFor="register-confirm-password">Confirm password</label>
+                <input
+                  id="register-confirm-password"
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={loginForm.confirm_password}
+                  onChange={(event) =>
+                    setLoginForm((current) => ({
+                      ...current,
+                      confirm_password: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
             <div className="auth-actions">
-              <button type="submit">Log in</button>
+              <button type="submit">{isRegisterMode ? "Create account" : "Log in"}</button>
               <button type="button" className="secondary-button" onClick={showLanding}>
                 Back To Landing
               </button>
             </div>
             {authError ? <p className="auth-error">{authError}</p> : null}
           </form>
+        </section>
+      </main>
+    );
+  }
+
+  if (showApp && currentUser && !currentUser.is_verified) {
+    return (
+      <main className="page auth-shell">
+        <section className="panel auth-card">
+          <p className="app-eyebrow">Verify Email</p>
+          <h1 className="auth-title">Check your inbox for {currentUser.email}</h1>
+          <p className="panel-kicker">
+            Verify your email before using saved heroes, search history, and the MirrorQuant workspace.
+          </p>
+          <div className="auth-form">
+            <div className="auth-actions">
+              <button type="button" onClick={handleRefreshSession} disabled={verificationLoading}>
+                {verificationLoading ? "Refreshing..." : "I already verified"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleResendVerification}
+                disabled={verificationLoading}
+              >
+                Resend verification
+              </button>
+            </div>
+            {verificationNotice ? <p className="auth-success">{verificationNotice}</p> : null}
+            {verificationLink ? (
+              <a className="auth-link" href={verificationLink}>
+                Open verification link
+              </a>
+            ) : null}
+            {authError ? <p className="auth-error">{authError}</p> : null}
+            <div className="auth-actions">
+              <button type="button" className="secondary-button" onClick={handleLogout}>
+                Logout
+              </button>
+              <button type="button" className="secondary-button" onClick={showLanding}>
+                Back To Landing
+              </button>
+            </div>
+          </div>
         </section>
       </main>
     );
@@ -1239,7 +1428,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
         </div>
       ) : (
         <main id="app-shell" className="page app-shell">
-          <section className="app-topbar panel">
+          <section className="app-topbar panel dashboard-topbar">
             <div>
               <p className="app-eyebrow">MirrorQuant workspace</p>
               <h2 className="app-shell-title">Saved heroes, search history, and live DNA retrieval.</h2>
@@ -1251,317 +1440,409 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
             </div>
           </section>
 
-          <section className="app-hero">
-            <div className="app-hero-copy">
-              <p className="app-eyebrow">AI-first fintech platform</p>
-              <h1 className="app-title">MirrorQuant</h1>
-              <p className="app-lede">
-                Save any hero window, run DNA searches on demand, and revisit the exact result snapshots later.
-              </p>
-            </div>
-            <div className="app-hero-badge">
-              <span>Regime</span>
-              <strong>{marketWatch?.headline_regime || "Loading..."}</strong>
-            </div>
-          </section>
-
-          <section className="panel controls">
-            <div className="control-field">
-              <label htmlFor="ticker-input">Ticker</label>
-              <input
-                id="ticker-input"
-                type="text"
-                placeholder="AAPL"
-                maxLength="16"
-                value={form.ticker}
-                onChange={(event) => setForm((current) => ({ ...current, ticker: event.target.value }))}
-              />
-            </div>
-            <div className="control-field">
-              <label htmlFor="title-input">Hero title</label>
-              <input
-                id="title-input"
-                type="text"
-                placeholder="Optional saved label"
-                value={form.title}
-                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              />
-            </div>
-            <div className="control-field">
-              <label htmlFor="mode-select">DNA mode</label>
-              <select
-                id="mode-select"
-                value={form.mode}
-                onChange={(event) => setForm((current) => ({ ...current, mode: event.target.value }))}
-              >
-                <option value="price_dna">Price DNA</option>
-                <option value="economic_dna">Economic DNA</option>
-                <option value="social_dna">Social DNA</option>
-              </select>
-            </div>
-            <div className="control-field">
-              <label htmlFor="start-date">Start date</label>
-              <input
-                id="start-date"
-                type="date"
-                value={form.start_date}
-                onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value }))}
-              />
-            </div>
-            <div className="control-field">
-              <label htmlFor="end-date">End date</label>
-              <input
-                id="end-date"
-                type="date"
-                value={form.end_date}
-                onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))}
-              />
-            </div>
-            <div className="control-actions">
-              <button id="create-hero-button" type="button" disabled={loadingCreate || loadingRun} onClick={handleCreateHero}>
-                {loadingCreate ? "Saving..." : "Save Hero"}
-              </button>
-              <button id="run-search-button" type="button" className="secondary-button" disabled={loadingCreate || loadingRun} onClick={handleRunSearch}>
-                {loadingRun ? "Running..." : "Run Search"}
-              </button>
-              <button 
-                type="button"
-                className="archive-button"
-                disabled={loadingCreate || loadingRun || !currentHero}
-                onClick={handleArchiveHero}
-              >
-                Archive Hero
-              </button>
-              <p className="context-text">{heroStatus}</p>
-            </div>
-          </section>
-
-          <section className="grid history-grid">
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Saved Heroes</h2>
-                  <p className="panel-kicker">Reusable ticker windows you can reopen and search again.</p>
-                </div>
+          <div className="workspace-frame">
+            <aside className="panel workspace-quicklinks" aria-label="Workspace quicklinks">
+              <div className="workspace-quicklinks-head">
+                <p className="app-eyebrow">Quicklinks</p>
+                <h3>Jump through the workspace</h3>
+                <p className="panel-kicker">Fast navigation for the main research blocks.</p>
               </div>
-              <div className="stack">
-                {!savedHeroes.length ? (
-                  <div className="card"><p>No heroes saved yet. Create one from any ticker and date range.</p></div>
-                ) : (
-                  <div className="saved-collection">
-                    {savedHeroes.map((hero) => (
-                      <button
-                        key={hero.id}
-                        type="button"
-                        className={`saved-item ${currentHero?.id === hero.id ? "is-active" : ""}`}
-                        onClick={() => selectHero(hero.id).catch((error) => setHeroStatus(error.message))}
-                      >
-                        <strong>{hero.title || buildHeroIdentity(hero)}</strong>
-                        <span>{buildHeroIdentity(hero)}</span>
-                        <p className="meta">{hero.start_date} to {hero.end_date}</p>
-                        <p className="meta">Updated {formatDateTime(hero.updated_at)}</p>
-                      </button>
-                    ))}
+              <div className="workspace-quicklinks-list">
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-command-center")}>
+                  <span className="workspace-quicklink-index">01</span>
+                  <span>Command Center</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-launchpad")}>
+                  <span className="workspace-quicklink-index">02</span>
+                  <span>Signal Launchpad</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-saved-heroes")}>
+                  <span className="workspace-quicklink-index">03</span>
+                  <span>Saved Heroes</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-search-history")}>
+                  <span className="workspace-quicklink-index">04</span>
+                  <span>Search History</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-hero-window")}>
+                  <span className="workspace-quicklink-index">05</span>
+                  <span>Hero Window</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-mirror-matches")}>
+                  <span className="workspace-quicklink-index">06</span>
+                  <span>Mirror Matches</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-market-watch")}>
+                  <span className="workspace-quicklink-index">07</span>
+                  <span>Market Watch</span>
+                </button>
+                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-industry-chain")}>
+                  <span className="workspace-quicklink-index">08</span>
+                  <span>Industry Chain</span>
+                </button>
+              </div>
+            </aside>
+
+            <div className="workspace-content">
+              <section id="workspace-command-center" className="workspace-overview">
+                <article className="panel workspace-command">
+                  <div className="workspace-command-copy">
+                    <p className="app-eyebrow">Production quant dashboard</p>
+                    <h1 className="app-title">MirrorQuant</h1>
+                    <p className="app-lede">
+                      Save a hero window, launch Price, Economic, or Social DNA, and reopen the exact ranked run later.
+                    </p>
                   </div>
-                )}
-              </div>
-            </article>
-
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Search History</h2>
-                  <p className="panel-kicker">Saved DNA runs and their top matches for the active hero.</p>
-                </div>
-              </div>
-              <div className="stack">
-                {!currentHero ? (
-                  <div className="card"><p>Select a saved hero to view its search history.</p></div>
-                ) : !currentSearchRuns.length ? (
-                  <div className="card"><p>No saved searches for this hero yet. Run one to create a reusable result snapshot.</p></div>
-                ) : (
-                  <div className="saved-collection">
-                    {currentSearchRuns.map((run) => (
-                      <button
-                        key={run.id}
-                        type="button"
-                        className={`saved-item ${currentSearchRun?.id === run.id ? "is-active" : ""}`}
-                        onClick={() => loadSearchRun(run.id).catch((error) => setHeroStatus(error.message))}
-                      >
-                        <strong>{modeLabel(run.mode)}</strong>
-                        <span>{backendLabel(run.search_backend)}</span>
-                        <p className="meta">{formatDateTime(run.created_at)}</p>
-                        <p className="meta">
-                          {run.top_match
-                            ? `Top match: ${run.top_match.ticker} (${Math.round(run.top_match.score * 100)}%)`
-                            : "No top match saved"}
-                        </p>
-                      </button>
-                    ))}
+                  <div className="workspace-command-band">
+                    <article className="workspace-band-card">
+                      <span className="tile-label">Active hero</span>
+                      <strong>{activeHeroLabel}</strong>
+                      <p className="meta">Reusable reference window for the next run.</p>
+                    </article>
+                    <article className="workspace-band-card">
+                      <span className="tile-label">Mode armed</span>
+                      <strong>{activeModeLabel}</strong>
+                      <p className="meta">Selected engine for the next saved search.</p>
+                    </article>
+                    <article className="workspace-band-card">
+                      <span className="tile-label">Top saved match</span>
+                      <strong>{topMatchLabel}</strong>
+                      <p className="meta">Latest ranked analog from the active run.</p>
+                    </article>
                   </div>
-                )}
-              </div>
-            </article>
-          </section>
+                </article>
 
-          <section className="summary-band" aria-label="Active search summary">
-            <article className="summary-tile">
-              <span className="tile-label">Active Mode</span>
-              <strong>{summaryMode}</strong>
-            </article>
-            <article className="summary-tile">
-              <span className="tile-label">Search Engine</span>
-              <strong>{summaryBackend}</strong>
-            </article>
-            <article className="summary-tile">
-              <span className="tile-label">Hero Regime</span>
-              <strong>{summaryHeroRegime}</strong>
-            </article>
-            <article className="summary-tile">
-              <span className="tile-label">Encoded Window</span>
-              <strong>{summaryWindow}</strong>
-            </article>
-          </section>
-
-          <section className="grid">
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Hero Window</h2>
-                  <p className="panel-kicker">The active saved reference window and its latest DNA snapshot.</p>
-                </div>
-              </div>
-              <div className="stack">
-                <HeroCard hero={currentHero} run={currentSearchRun} heroSeries={heroSeries} />
-              </div>
-            </article>
-
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Market Watch</h2>
-                  <p className="panel-kicker">Macro weather and risk tone around the current regime.</p>
-                </div>
-              </div>
-              <div className="stack">
-                {!marketWatch ? (
-                  <div className="card"><p>Loading market watch...</p></div>
-                ) : (
-                  marketWatch.indicators.map((indicator) => (
-                    <div key={`${indicator.name}-${indicator.value}`} className="card watch-card">
-                      <div className="card-topline">
-                        <div>
-                          <h3>{indicator.name}</h3>
-                          {indicator.symbol ? <p className="meta">{indicator.symbol}</p> : null}
-                        </div>
-                        <span className="status-pill">{indicator.status}</span>
-                      </div>
-                      <div className="sparkline-shell">
-                        <Sparkline series={indicator.series} fallbackLabel={`${indicator.name}-${indicator.value}`} />
-                      </div>
-                      <p className="score">{indicator.value}</p>
-                      {typeof indicator.change_pct === "number" ? (
-                        <p className="meta">
-                          Last {indicator.series?.length || 0} sessions: {indicator.change_pct >= 0 ? "+" : ""}{indicator.change_pct}%
-                        </p>
-                      ) : null}
-                      <p>{indicator.insight}</p>
+                <aside className="workspace-overview-side">
+                  <article className="app-hero-badge workspace-regime-card">
+                    <span>Headline regime</span>
+                    <strong>{regimeHeadline}</strong>
+                    <p className="meta">Macro tone and market weather around the current tape.</p>
+                  </article>
+                  <article className="panel workspace-status-card">
+                    <div className="workspace-status-head">
+                      <p className="app-eyebrow">System status</p>
+                      <span className="status-pill">{loadingRun ? "Running" : "Ready"}</span>
                     </div>
-                  ))
-                )}
-              </div>
-            </article>
-          </section>
+                    <p className="workspace-status-copy">{heroStatus}</p>
+                    <div className="workspace-status-actions">
+                      <button id="create-hero-button" type="button" disabled={loadingCreate || loadingRun} onClick={handleCreateHero}>
+                        {loadingCreate ? "Saving..." : "Save Hero"}
+                      </button>
+                      <button id="run-search-button" type="button" className="secondary-button" disabled={loadingCreate || loadingRun} onClick={handleRunSearch}>
+                        {loadingRun ? "Running..." : "Run Search"}
+                      </button>
+                      <button
+                        type="button"
+                        className="archive-button"
+                        disabled={loadingCreate || loadingRun || !currentHero}
+                        onClick={handleArchiveHero}
+                      >
+                        Archive Hero
+                      </button>
+                    </div>
+                  </article>
+                </aside>
+              </section>
 
-          <section className="grid">
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Mirror Matches</h2>
-                  <p className="panel-kicker">Top latent analogs ranked by hidden behavioral similarity.</p>
+              <section className="summary-band dashboard-summary-band" aria-label="Active search summary">
+                <article className="summary-tile">
+                  <span className="tile-label">Active Mode</span>
+                  <strong>{summaryMode}</strong>
+                </article>
+                <article className="summary-tile">
+                  <span className="tile-label">Search Engine</span>
+                  <strong>{summaryBackend}</strong>
+                </article>
+                <article className="summary-tile">
+                  <span className="tile-label">Hero Regime</span>
+                  <strong>{summaryHeroRegime}</strong>
+                </article>
+                <article className="summary-tile">
+                  <span className="tile-label">Encoded Window</span>
+                  <strong>{summaryWindow}</strong>
+                </article>
+                <article className="summary-tile">
+                  <span className="tile-label">Saved Heroes</span>
+                  <strong>{heroCount}</strong>
+                </article>
+                <article className="summary-tile">
+                  <span className="tile-label">Saved Runs</span>
+                  <strong>{runCount}</strong>
+                </article>
+              </section>
+
+              <section id="workspace-launchpad" className="panel controls workspace-controls">
+                <div className="controls-header">
+                  <div>
+                    <p className="app-eyebrow">Signal launchpad</p>
+                    <h2>Configure the next hero window</h2>
+                    <p className="panel-kicker">The form below still drives save, search, and archive exactly as before.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="stack">
-                {!currentSearchRun?.matches?.length ? (
-                  <div className="card"><p>No matches saved for this run yet.</p></div>
-                ) : (
-                  currentSearchRun.matches.map((item, index) => {
-                    const scorePct = Math.round(item.score * 100);
-                    return (
-                      <div key={`${item.ticker}-${index}`} className="card match-card">
-                        <div className="card-topline">
-                          <div className="match-title">
-                            <span className="rank-badge">#{index + 1}</span>
-                            <div>
-                              <h3>{item.name} ({item.ticker})</h3>
-                              <p className="meta">{item.sector || "Unknown"}</p>
+                <div className="control-field">
+                  <label htmlFor="ticker-input">Ticker</label>
+                  <input
+                    id="ticker-input"
+                    type="text"
+                    placeholder="AAPL"
+                    maxLength="16"
+                    value={form.ticker}
+                    onChange={(event) => setForm((current) => ({ ...current, ticker: event.target.value }))}
+                  />
+                </div>
+                <div className="control-field">
+                  <label htmlFor="title-input">Hero title</label>
+                  <input
+                    id="title-input"
+                    type="text"
+                    placeholder="Optional saved label"
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                  />
+                </div>
+                <div className="control-field">
+                  <label htmlFor="mode-select">DNA mode</label>
+                  <select
+                    id="mode-select"
+                    value={form.mode}
+                    onChange={(event) => setForm((current) => ({ ...current, mode: event.target.value }))}
+                  >
+                    <option value="price_dna">Price DNA</option>
+                    <option value="economic_dna">Economic DNA</option>
+                    <option value="social_dna">Social DNA</option>
+                  </select>
+                </div>
+                <div className="control-field">
+                  <label htmlFor="start-date">Start date</label>
+                  <input
+                    id="start-date"
+                    type="date"
+                    value={form.start_date}
+                    onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value }))}
+                  />
+                </div>
+                <div className="control-field">
+                  <label htmlFor="end-date">End date</label>
+                  <input
+                    id="end-date"
+                    type="date"
+                    value={form.end_date}
+                    onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))}
+                  />
+                </div>
+              </section>
+
+              <section className="workspace-grid">
+            <div className="workspace-sidebar">
+              <article id="workspace-saved-heroes" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Saved Heroes</h2>
+                    <p className="panel-kicker">Reusable ticker windows you can reopen and search again.</p>
+                  </div>
+                </div>
+                <div className="stack">
+                  {!savedHeroes.length ? (
+                    <div className="card"><p>No heroes saved yet. Create one from any ticker and date range.</p></div>
+                  ) : (
+                    <div className="saved-collection">
+                      {savedHeroes.map((hero) => (
+                        <button
+                          key={hero.id}
+                          type="button"
+                          className={`saved-item ${currentHero?.id === hero.id ? "is-active" : ""}`}
+                          onClick={() => selectHero(hero.id).catch((error) => setHeroStatus(error.message))}
+                        >
+                          <strong>{hero.title || buildHeroIdentity(hero)}</strong>
+                          <span>{buildHeroIdentity(hero)}</span>
+                          <p className="meta">{hero.start_date} to {hero.end_date}</p>
+                          <p className="meta">Updated {formatDateTime(hero.updated_at)}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </article>
+
+              <article id="workspace-search-history" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Search History</h2>
+                    <p className="panel-kicker">Saved DNA runs and their top matches for the active hero.</p>
+                  </div>
+                </div>
+                <div className="stack">
+                  {!currentHero ? (
+                    <div className="card"><p>Select a saved hero to view its search history.</p></div>
+                  ) : !currentSearchRuns.length ? (
+                    <div className="card"><p>No saved searches for this hero yet. Run one to create a reusable result snapshot.</p></div>
+                  ) : (
+                    <div className="saved-collection">
+                      {currentSearchRuns.map((run) => (
+                        <button
+                          key={run.id}
+                          type="button"
+                          className={`saved-item ${currentSearchRun?.id === run.id ? "is-active" : ""}`}
+                          onClick={() => loadSearchRun(run.id).catch((error) => setHeroStatus(error.message))}
+                        >
+                          <strong>{modeLabel(run.mode)}</strong>
+                          <span>{backendLabel(run.search_backend)}</span>
+                          <p className="meta">{formatDateTime(run.created_at)}</p>
+                          <p className="meta">
+                            {run.top_match
+                              ? `Top match: ${run.top_match.ticker} (${Math.round(run.top_match.score * 100)}%)`
+                              : "No top match saved"}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </article>
+            </div>
+
+            <div className="workspace-main">
+              <article id="workspace-hero-window" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Hero Window</h2>
+                    <p className="panel-kicker">The active saved reference window and its latest DNA snapshot.</p>
+                  </div>
+                </div>
+                <div className="stack">
+                  <HeroCard hero={currentHero} run={currentSearchRun} heroSeries={heroSeries} />
+                </div>
+              </article>
+
+              <article id="workspace-mirror-matches" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Mirror Matches</h2>
+                    <p className="panel-kicker">Top latent analogs ranked by hidden behavioral similarity.</p>
+                  </div>
+                </div>
+                <div className="stack">
+                  {!currentSearchRun?.matches?.length ? (
+                    <div className="card"><p>No matches saved for this run yet.</p></div>
+                  ) : (
+                    currentSearchRun.matches.map((item, index) => {
+                      const scorePct = Math.round(item.score * 100);
+                      return (
+                        <div key={`${item.ticker}-${index}`} className="card match-card">
+                          <div className="card-topline">
+                            <div className="match-title">
+                              <span className="rank-badge">#{index + 1}</span>
+                              <div>
+                                <h3>{item.name} ({item.ticker})</h3>
+                                <p className="meta">{item.sector || "Unknown"}</p>
+                              </div>
+                            </div>
+                            <div className="score-badge">
+                              <span className="mini-label">{confidenceTone(item.score)}</span>
+                              <strong>{scorePct}%</strong>
                             </div>
                           </div>
-                          <div className="score-badge">
-                            <span className="mini-label">{confidenceTone(item.score)}</span>
-                            <strong>{scorePct}%</strong>
+                          <p><strong>{item.regime_label}</strong></p>
+                          {item.matched_window ? (
+                            <p className="meta">
+                              Matched window: {item.matched_window.start_date} to {item.matched_window.end_date}
+                            </p>
+                          ) : null}
+                          {item.series?.length ? (
+                            <div className="sparkline-shell">
+                              <Sparkline series={item.series} fallbackLabel={`${item.ticker}-${index}`} />
+                            </div>
+                          ) : null}
+                          <div className="score-track" aria-hidden="true">
+                            <span className="score-fill" style={{ width: `${Math.max(8, Math.min(scorePct, 100))}%` }}></span>
                           </div>
+                          <p>{item.explanation}</p>
                         </div>
-                        <p><strong>{item.regime_label}</strong></p>
-                        {item.matched_window ? (
+                      );
+                    })
+                  )}
+                </div>
+              </article>
+            </div>
+
+            <div className="workspace-context">
+              <article id="workspace-market-watch" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Market Watch</h2>
+                    <p className="panel-kicker">Macro weather and risk tone around the current regime.</p>
+                  </div>
+                </div>
+                <div className="stack">
+                  {!marketWatch ? (
+                    <div className="card"><p>Loading market watch...</p></div>
+                  ) : (
+                    marketWatch.indicators.map((indicator) => (
+                      <div key={`${indicator.name}-${indicator.value}`} className="card watch-card">
+                        <div className="card-topline">
+                          <div>
+                            <h3>{indicator.name}</h3>
+                            {indicator.symbol ? <p className="meta">{indicator.symbol}</p> : null}
+                          </div>
+                          <span className="status-pill">{indicator.status}</span>
+                        </div>
+                        <div className="sparkline-shell">
+                          <Sparkline series={indicator.series} fallbackLabel={`${indicator.name}-${indicator.value}`} />
+                        </div>
+                        <p className="score">{indicator.value}</p>
+                        {typeof indicator.change_pct === "number" ? (
                           <p className="meta">
-                            Matched window: {item.matched_window.start_date} to {item.matched_window.end_date}
+                            Last {indicator.series?.length || 0} sessions: {indicator.change_pct >= 0 ? "+" : ""}{indicator.change_pct}%
                           </p>
                         ) : null}
-                        {item.series?.length ? (
-                          <div className="sparkline-shell">
-                            <Sparkline series={item.series} fallbackLabel={`${item.ticker}-${index}`} />
-                          </div>
-                        ) : null}
-                        <div className="score-track" aria-hidden="true">
-                          <span className="score-fill" style={{ width: `${Math.max(8, Math.min(scorePct, 100))}%` }}></span>
-                        </div>
-                        <p>{item.explanation}</p>
+                        <p>{indicator.insight}</p>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </article>
-
-            <article className="panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Industry Chain</h2>
-                  <p className="panel-kicker">Why a quant match may still make sense in real-world market structure.</p>
+                    ))
+                  )}
                 </div>
-              </div>
-              <div className="stack">
-                {!industryChain.relationships?.length ? (
-                  <div className="card industry-card">
-                    <h3>{industryChain.ticker} industry map</h3>
-                    <p className="meta">No saved relationship map exists for this ticker yet.</p>
+              </article>
+
+              <article id="workspace-industry-chain" className="panel workspace-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Industry Chain</h2>
+                    <p className="panel-kicker">Why a quant match may still make sense in real-world market structure.</p>
                   </div>
-                ) : (
-                  <div className="card industry-card">
-                    <h3>{industryChain.ticker} industry map</h3>
-                    <div className="network-grid" aria-hidden="true">
-                      {industryChain.relationships.map((item, index) => (
-                        <span key={`${item.ticker}-${index}`} className={`network-node node-${(index % 4) + 1}`}></span>
-                      ))}
+                </div>
+                <div className="stack">
+                  {!industryChain.relationships?.length ? (
+                    <div className="card industry-card">
+                      <h3>{industryChain.ticker} industry map</h3>
+                      <p className="meta">No saved relationship map exists for this ticker yet.</p>
                     </div>
-                    <div className="chain-list">
-                      {industryChain.relationships.map((item, index) => (
-                        <article key={`${item.ticker}-${item.direction}-${index}`} className="chain-item">
-                          <div className="card-topline">
-                            <strong>{item.ticker}</strong>
-                            <span className="status-pill">{item.direction}</span>
-                          </div>
-                          <p className="meta">{item.relationship}</p>
-                          <p>{item.impact}</p>
-                        </article>
-                      ))}
+                  ) : (
+                    <div className="card industry-card">
+                      <h3>{industryChain.ticker} industry map</h3>
+                      <div className="network-grid" aria-hidden="true">
+                        {industryChain.relationships.map((item, index) => (
+                          <span key={`${item.ticker}-${index}`} className={`network-node node-${(index % 4) + 1}`}></span>
+                        ))}
+                      </div>
+                      <div className="chain-list">
+                        {industryChain.relationships.map((item, index) => (
+                          <article key={`${item.ticker}-${item.direction}-${index}`} className="chain-item">
+                            <div className="card-topline">
+                              <strong>{item.ticker}</strong>
+                              <span className="status-pill">{item.direction}</span>
+                            </div>
+                            <p className="meta">{item.relationship}</p>
+                            <p>{item.impact}</p>
+                          </article>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </article>
-          </section>
+                  )}
+                </div>
+              </article>
+            </div>
+              </section>
+            </div>
+          </div>
         </main>
       )}
     </>
