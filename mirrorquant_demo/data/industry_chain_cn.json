@@ -1,0 +1,62 @@
+{
+  "600519": [
+    {
+      "ticker": "000858",
+      "relationship": "Category peer — premium baijiu",
+      "direction": "Lateral",
+      "impact": "五粮液 shares the same gifting-season demand cycle and policy sensitivity; correlated institutional positioning flows create latent co-movement."
+    },
+    {
+      "ticker": "600809",
+      "relationship": "Category peer — regional premium baijiu",
+      "direction": "Lateral",
+      "impact": "山西汾酒 benefits from the same consumption-upgrade narrative but with higher beta to policy stimulus, acting as a sentiment amplifier for the sector."
+    },
+    {
+      "ticker": "603369",
+      "relationship": "Downstream — baijiu logistics & distribution",
+      "direction": "Downstream",
+      "impact": "今世缘 distribution channel health reflects wholesale inventory dynamics that can preview retail demand signals for top-tier baijiu brands."
+    }
+  ],
+  "300750": [
+    {
+      "ticker": "002460",
+      "relationship": "Upstream — lithium supplier",
+      "direction": "Upstream",
+      "impact": "赣锋锂业 lithium carbonate pricing directly compresses or expands CATL's gross margin, making it a leading cost-structure signal."
+    },
+    {
+      "ticker": "002594",
+      "relationship": "Key customer — EV OEM",
+      "direction": "Downstream",
+      "impact": "比亚迪 vehicle shipment data is the clearest demand pulse for CATL's battery segment; any guidance revision ripples upstream."
+    },
+    {
+      "ticker": "300014",
+      "relationship": "Upstream — anode materials",
+      "direction": "Upstream",
+      "impact": "亿纬锂能 competes and co-develops in the cell chemistry layer; its capex cycles signal where next-gen battery capacity is heading."
+    }
+  ],
+  "600036": [
+    {
+      "ticker": "601166",
+      "relationship": "Sector peer — joint-stock bank",
+      "direction": "Lateral",
+      "impact": "兴业银行 tracks similar NIM and asset-quality cycles; divergence in their spreads is often a signal of relative balance-sheet confidence."
+    },
+    {
+      "ticker": "300059",
+      "relationship": "Downstream — retail brokerage & fund distribution",
+      "direction": "Downstream",
+      "impact": "东方财富 retail investor activity is a proxy for the wealth-management fee income that CMB earns from its private banking arm."
+    },
+    {
+      "ticker": "601688",
+      "relationship": "Ecosystem partner — securities trading volumes",
+      "direction": "Lateral",
+      "impact": "华泰证券 market-making and IPO pipeline health reflects the capital markets activity that CMB's investment banking and custody businesses depend on."
+    }
+  ]
+}

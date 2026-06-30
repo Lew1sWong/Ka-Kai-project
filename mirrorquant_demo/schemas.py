@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 Mode = Literal["price_dna", "economic_dna", "social_dna"]
+Market = Literal["us", "cn"]
 
 
 class HeroCreate(BaseModel):
@@ -34,6 +35,7 @@ class HeroCreate(BaseModel):
 
 class SearchRunCreate(BaseModel):
     mode: Mode = "price_dna"
+    market: Market = "us"
 
 
 class LoginRequest(BaseModel):

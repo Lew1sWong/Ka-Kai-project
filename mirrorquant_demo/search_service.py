@@ -47,6 +47,12 @@ def _load_curated_heroes() -> dict[str, dict[str, Any]]:
     return {str(hero["ticker"]).upper(): hero for hero in heroes}
 
 
+def _market_prices_path(market: str = "us") -> Path:
+    """Prices CSV for the given market ('us' -> prices.csv, 'cn' -> prices_cn.csv)."""
+    suffix = "_cn" if market == "cn" else ""
+    return DATA_DIR / f"prices{suffix}.csv"
+
+
 def _load_prices(path: Path = PRICES_PATH) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
     return df.sort_values(["ticker", "date"]).copy()
@@ -213,10 +219,10 @@ def _price_dna_traits(window_df: pd.DataFrame) -> list[str]:
     return traits[:3]
 
 
-def _build_price_dna_run(hero: Hero) -> dict[str, Any]:
+def _build_price_dna_run(hero: Hero, market: str = "us") -> dict[str, Any]:
     selected_start = hero.start_date.isoformat()
     selected_end = hero.end_date.isoformat()
-    df = _load_prices()
+    df = _load_prices(_market_prices_path(market))
     hero_window = _get_price_window(df, hero.ticker, hero.start_date, hero.end_date)
 
     results, hero_code, selected_window, effective_window = find_vqvae_mirrors(
@@ -224,6 +230,7 @@ def _build_price_dna_run(hero: Hero) -> dict[str, Any]:
         start=selected_start,
         end=selected_end,
         top_k=5,
+        market=market,
     )
 
     matches = []
@@ -562,11 +569,11 @@ def get_search_run(session: Session, search_run_id: int, user_id: int) -> dict[s
     return _serialize_search_run(run)
 
 
-def _build_search_payload(hero: Hero, mode: Mode) -> dict[str, Any]:
+def _build_search_payload(hero: Hero, mode: Mode, market: str = "us") -> dict[str, Any]:
     validate_hero_window(hero.ticker, hero.start_date, hero.end_date)
 
     if mode == "price_dna":
-        return _build_price_dna_run(hero)
+        return _build_price_dna_run(hero, market=market)
     if mode == "economic_dna":
         return _build_economic_dna_run(hero)
     if mode == "social_dna":
@@ -581,12 +588,18 @@ def _get_user_hero(session: Session, hero_id: int, user_id: int) -> Hero | None:
         )
     )
 
-def run_search_for_hero(session: Session, hero_id: int, mode: Mode, user_id: int) -> dict[str, Any]:
+def run_search_for_hero(
+    session: Session,
+    hero_id: int,
+    mode: Mode,
+    user_id: int,
+    market: str = "us",
+) -> dict[str, Any]:
     hero = _get_user_hero(session, hero_id, user_id)
     if hero is None:
         raise LookupError(f"Hero {hero_id} was not found")
 
-    payload = _build_search_payload(hero, mode)
+    payload = _build_search_payload(hero, mode, market=market)
 
     search_run = SearchRun(
         hero_id=hero.id,

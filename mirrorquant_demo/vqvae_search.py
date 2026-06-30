@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
@@ -11,13 +13,18 @@ from mirrorquant_demo.train_vqvae import VQVAE
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-PRICES_PATH = DATA_DIR / "prices.csv"
-MODEL_PATH = DATA_DIR / "vqvae_model.pt"
-EMBEDDINGS_PATH = DATA_DIR / "window_embeddings.npz"
-META_PATH = DATA_DIR / "window_embedding_meta.csv"
+
+def _market_paths(market: str):
+    suffix = "_cn" if market == "cn" else ""
+    return (
+        DATA_DIR / f"prices{suffix}.csv",
+        DATA_DIR / f"vqvae_model{suffix}.pt",
+        DATA_DIR / f"window_embeddings{suffix}.npz",
+        DATA_DIR / f"window_embedding_meta{suffix}.csv",
+    )
 
 
-def load_prices(path: Path = PRICES_PATH) -> pd.DataFrame:
+def load_prices(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
     return df.sort_values(["ticker", "date"]).copy()
 
@@ -45,15 +52,15 @@ def make_sequence_features(window_df: pd.DataFrame) -> np.ndarray:
     return window_df[["daily_return", "volume_change", "price_rel"]].to_numpy(dtype=np.float32)
 
 
-def load_model_bundle():
-    return torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
+def load_model_bundle(model_path: Path):
+    return torch.load(model_path, map_location="cpu", weights_only=False)
 
 
-def load_embedding_library():
-    data = np.load(EMBEDDINGS_PATH)
+def load_embedding_library(embeddings_path: Path, meta_path: Path):
+    data = np.load(embeddings_path)
     embeddings = data["embeddings"]
     codes = data["codes"]
-    meta_df = pd.read_csv(META_PATH, parse_dates=["start_date", "end_date"])
+    meta_df = pd.read_csv(meta_path, parse_dates=["start_date", "end_date"])
     return embeddings, codes, meta_df
 
 
@@ -102,19 +109,34 @@ def encode_hero_window(model, bundle, window_df: pd.DataFrame):
     return embedding, code, effective_window
 
 
-def find_vqvae_mirrors(hero_ticker: str, start: str, end: str, top_k: int = 5):
-    df = load_prices()
+def find_vqvae_mirrors(
+    hero_ticker: str,
+    start: str,
+    end: str,
+    top_k: int = 5,
+    market: str = "us",
+):
+    prices_path, model_path, embeddings_path, meta_path = _market_paths(market)
+
+    for path in (prices_path, model_path, embeddings_path, meta_path):
+        if not path.exists():
+            raise ValueError(
+                f"Required VQ-VAE artifact not found: {path}. "
+                f"Run the full training pipeline for market='{market}' first."
+            )
+
+    df = load_prices(prices_path)
     hero_window = get_window(df, hero_ticker, start, end)
 
     if len(hero_window) < 10:
         raise ValueError("Hero window is too small")
 
-    bundle = load_model_bundle()
+    bundle = load_model_bundle(model_path)
     model = build_model(bundle)
 
     hero_embedding, hero_code, effective_window = encode_hero_window(model, bundle, hero_window)
 
-    embeddings, codes, meta_df = load_embedding_library()
+    embeddings, codes, meta_df = load_embedding_library(embeddings_path, meta_path)
 
     similarities = cosine_similarity(
         hero_embedding.reshape(1, -1),
