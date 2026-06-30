@@ -147,6 +147,20 @@ export default function ModulesPage() {
   // IC material
   const [icOut, setIcOut] = useState<any>(null);
 
+  // KB semantic search
+  const [kbQuery, setKbQuery] = useState("Federal Reserve interest rate decision");
+  const [kbSearch, setKbSearch] = useState<any>(null);
+
+  // Data diode (one-way transfer)
+  const [dSource, setDSource] = useState("reuters.com");
+  const [dTitle, setDTitle] = useState("Fed holds rates steady");
+  const [dContent, setDContent] = useState(
+    "The Federal Reserve held its policy rate steady amid cooling inflation."
+  );
+  const [dClass, setDClass] = useState("public");
+  const [diodeOut, setDiodeOut] = useState<any>(null);
+  const [diodeList, setDiodeList] = useState<any>(null);
+
   const [err, setErr] = useState<string>("");
   const guard = (fn: () => Promise<void>) => async () => {
     setErr("");
@@ -277,6 +291,75 @@ export default function ModulesPage() {
         </button>
         <Compliance data={icOut} />
         <Json value={icOut} />
+      </Section>
+
+      <Section title="Knowledge Base Search — Vector Store (Module D)">
+        <input style={inputStyle} value={kbQuery} onChange={(e) => setKbQuery(e.target.value)} placeholder="Semantic search query" />
+        <button
+          style={btnStyle}
+          onClick={guard(async () => {
+            const r = await api("/api/kb/search", {
+              method: "POST",
+              body: JSON.stringify({ query: kbQuery, top_k: 5 }),
+            });
+            setKbSearch(r);
+          })}
+        >
+          Search KB
+        </button>
+        <p style={{ color: "#8fa3bf", fontSize: 12, marginBottom: 0 }}>
+          Each hit shows its retrieval <code>method</code> — <code>vector:*</code> (embedding store)
+          or <code>tfidf</code> (fallback).
+        </p>
+        <Compliance data={kbSearch} />
+        <Json value={kbSearch} />
+      </Section>
+
+      <Section title="Data Diode — One-Way Transfer (contract Art. 2.3 / 10.4)">
+        <p style={{ color: "#8fa3bf", fontSize: 12, marginTop: 0 }}>
+          Public intel flows External → Internal only. Confidential/internal content is
+          rejected at the gate; there is no internal → external path.
+        </p>
+        <input style={inputStyle} value={dSource} onChange={(e) => setDSource(e.target.value)} placeholder="Source (e.g. reuters.com)" />
+        <input style={inputStyle} value={dTitle} onChange={(e) => setDTitle(e.target.value)} placeholder="Title" />
+        <textarea style={{ ...inputStyle, minHeight: 60 }} value={dContent} onChange={(e) => setDContent(e.target.value)} placeholder="Public intelligence content" />
+        <input style={inputStyle} value={dClass} onChange={(e) => setDClass(e.target.value)} placeholder="classification (public)" />
+        <button
+          style={btnStyle}
+          onClick={guard(async () => {
+            const r = await api("/api/diode/ingest", {
+              method: "POST",
+              body: JSON.stringify({
+                source: dSource,
+                title: dTitle,
+                content: dContent,
+                classification: dClass,
+              }),
+            });
+            setDiodeOut(r);
+            setDiodeList(await api("/api/diode"));
+          })}
+        >
+          Submit to staging
+        </button>{" "}
+        <button
+          style={btnStyle}
+          onClick={guard(async () => {
+            const pkt = diodeOut?.packet;
+            if (!pkt?.id) throw new Error("Submit a packet first");
+            const r = await api(`/api/diode/packets/${pkt.id}/transfer`, { method: "POST" });
+            setDiodeOut(r);
+            setDiodeList(await api("/api/diode"));
+          })}
+        >
+          Transfer one-way → internal KB
+        </button>{" "}
+        <button style={btnStyle} onClick={guard(async () => setDiodeOut(await api("/api/diode/policy")))}>
+          Show policy
+        </button>
+        <Compliance data={diodeOut} />
+        <Json value={diodeOut} />
+        <Json value={diodeList} />
       </Section>
     </main>
   );

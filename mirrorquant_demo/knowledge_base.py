@@ -19,7 +19,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from mirrorquant_demo import llm
+from mirrorquant_demo import embeddings, llm
 from mirrorquant_demo.kb_models import Document, DocumentChunk
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -174,9 +174,29 @@ def ingest_document(
     session.add(document)
     session.flush()  # assign document.id
 
-    for index, chunk in enumerate(chunk_text(text)):
+    pieces = chunk_text(text)
+
+    # Compute embeddings up front (best-effort: a backend error must not block
+    # ingestion — chunks without embeddings simply fall back to TF-IDF at query).
+    vectors: list[list[float]] | None = None
+    model_name: str | None = None
+    try:
+        if pieces:
+            vectors = embeddings.embed_texts(pieces)
+            model_name = embeddings.backend_name()
+    except Exception:  # pragma: no cover - embeddings are optional/best-effort
+        vectors = None
+        model_name = None
+
+    for index, chunk in enumerate(pieces):
         session.add(
-            DocumentChunk(document_id=document.id, chunk_index=index, text=chunk)
+            DocumentChunk(
+                document_id=document.id,
+                chunk_index=index,
+                text=chunk,
+                embedding_json=(vectors[index] if vectors else None),
+                embedding_model=(model_name if vectors else None),
+            )
         )
 
     session.commit()
@@ -211,47 +231,28 @@ def _user_chunks(session: Session, user_id: int) -> list[DocumentChunk]:
     return list(session.scalars(stmt).all())
 
 
-def search_chunks(
-    session: Session, user_id: int, query: str, top_k: int = 5
-) -> list[dict]:
-    """TF-IDF + cosine retrieval over the user's own chunks. Deterministic, offline.
-
-    Returns ``[]`` when the user has no chunks. sklearn is imported lazily.
-    """
-    query = (query or "").strip()
-    chunks = _user_chunks(session, user_id)
-    if not chunks or not query:
-        return []
-
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ValueError("install scikit-learn to search the knowledge base") from exc
-
-    corpus = [chunk.text for chunk in chunks]
-    vectorizer = TfidfVectorizer(stop_words="english")
-    try:
-        matrix = vectorizer.fit_transform(corpus)
-        query_vec = vectorizer.transform([query])
-    except ValueError:
-        # Empty vocabulary (e.g. only stop-words / punctuation).
-        return []
-
-    scores = cosine_similarity(query_vec, matrix)[0]
-
-    # Build doc-title lookup so we avoid lazy-loading per chunk.
+def _titles_for(session: Session, chunks: list[DocumentChunk]) -> dict[int, str]:
+    """Doc-id -> title lookup (avoids per-chunk lazy loads)."""
     doc_ids = {chunk.document_id for chunk in chunks}
-    titles = {
+    if not doc_ids:
+        return {}
+    return {
         doc_id: title
         for doc_id, title in session.execute(
             select(Document.id, Document.title).where(Document.id.in_(doc_ids))
         ).all()
     }
 
-    ranked = sorted(
-        range(len(chunks)), key=lambda i: float(scores[i]), reverse=True
-    )
+
+def _rank_results(
+    session: Session,
+    chunks: list[DocumentChunk],
+    scores: list[float],
+    top_k: int,
+    method: str,
+) -> list[dict]:
+    titles = _titles_for(session, chunks)
+    ranked = sorted(range(len(chunks)), key=lambda i: float(scores[i]), reverse=True)
     top_k = max(0, int(top_k or 0))
     results: list[dict] = []
     for i in ranked[:top_k]:
@@ -266,9 +267,76 @@ def search_chunks(
                 "chunk_index": chunk.chunk_index,
                 "text": chunk.text,
                 "score": round(score, 6),
+                "method": method,
             }
         )
     return results
+
+
+def _vector_search(
+    session: Session, chunks: list[DocumentChunk], query: str, top_k: int
+) -> list[dict]:
+    """Embedding (vector-store) retrieval over chunks whose embedding backend
+    matches the current one. Returns [] if no compatible embeddings exist."""
+    current = embeddings.backend_name()
+    usable = [
+        c for c in chunks
+        if c.embedding_json is not None and c.embedding_model == current
+    ]
+    if not usable:
+        return []
+    query_vec = embeddings.embed_query(query)
+    matrix = [list(c.embedding_json) for c in usable]
+    scores = embeddings.cosine(query_vec, matrix)
+    if not scores:
+        return []
+    return _rank_results(session, usable, scores, top_k, method=f"vector:{current}")
+
+
+def _tfidf_search(
+    session: Session, chunks: list[DocumentChunk], query: str, top_k: int
+) -> list[dict]:
+    """Deterministic, offline TF-IDF + cosine retrieval (fallback)."""
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ValueError("install scikit-learn to search the knowledge base") from exc
+
+    corpus = [chunk.text for chunk in chunks]
+    vectorizer = TfidfVectorizer(stop_words="english")
+    try:
+        matrix = vectorizer.fit_transform(corpus)
+        query_vec = vectorizer.transform([query])
+    except ValueError:
+        # Empty vocabulary (e.g. only stop-words / punctuation).
+        return []
+    scores = cosine_similarity(query_vec, matrix)[0].tolist()
+    return _rank_results(session, chunks, scores, top_k, method="tfidf")
+
+
+def search_chunks(
+    session: Session, user_id: int, query: str, top_k: int = 5
+) -> list[dict]:
+    """Retrieve the user's most relevant chunks.
+
+    Prefers the embedding vector store; falls back to TF-IDF when no compatible
+    embeddings are stored (or the embedding backend errors). Both are offline and
+    deterministic. Returns ``[]`` when the user has no chunks.
+    """
+    query = (query or "").strip()
+    chunks = _user_chunks(session, user_id)
+    if not chunks or not query:
+        return []
+
+    try:
+        vector_hits = _vector_search(session, chunks, query, top_k)
+    except Exception:  # pragma: no cover - vector layer is best-effort
+        vector_hits = []
+    if vector_hits:
+        return vector_hits
+
+    return _tfidf_search(session, chunks, query, top_k)
 
 
 # --- Q&A + summarization ----------------------------------------------------

@@ -44,6 +44,7 @@ from backend.app.deps import (
 from backend.app.routers.hypothesis import router as hypothesis_router
 from backend.app.routers.portfolio import router as portfolio_router
 from backend.app.routers.knowledge_base import router as knowledge_base_router
+from backend.app.routers.diode import router as diode_router
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
@@ -384,6 +385,8 @@ app.add_middleware(
 app.include_router(hypothesis_router)
 app.include_router(portfolio_router)
 app.include_router(knowledge_base_router)
+# One-way data transfer mechanism (contract Articles 2.2/2.3/3.3/10.4).
+app.include_router(diode_router)
 
 
 @app.on_event("startup")
