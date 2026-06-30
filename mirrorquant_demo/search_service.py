@@ -47,6 +47,12 @@ def _load_curated_heroes() -> dict[str, dict[str, Any]]:
     return {str(hero["ticker"]).upper(): hero for hero in heroes}
 
 
+def _market_prices_path(market: str = "us") -> Path:
+    """Prices CSV for the given market ('us' -> prices.csv, 'cn' -> prices_cn.csv)."""
+    suffix = "_cn" if market == "cn" else ""
+    return DATA_DIR / f"prices{suffix}.csv"
+
+
 def _load_prices(path: Path = PRICES_PATH) -> pd.DataFrame:
     df = pd.read_csv(path, parse_dates=["date"])
     return df.sort_values(["ticker", "date"]).copy()
@@ -213,10 +219,10 @@ def _price_dna_traits(window_df: pd.DataFrame) -> list[str]:
     return traits[:3]
 
 
-def _build_price_dna_run(hero: Hero) -> dict[str, Any]:
+def _build_price_dna_run(hero: Hero, market: str = "us") -> dict[str, Any]:
     selected_start = hero.start_date.isoformat()
     selected_end = hero.end_date.isoformat()
-    df = _load_prices()
+    df = _load_prices(_market_prices_path(market))
     hero_window = _get_price_window(df, hero.ticker, hero.start_date, hero.end_date)
 
     results, hero_code, selected_window, effective_window = find_vqvae_mirrors(
@@ -224,6 +230,7 @@ def _build_price_dna_run(hero: Hero) -> dict[str, Any]:
         start=selected_start,
         end=selected_end,
         top_k=5,
+        market=market,
     )
 
     matches = []
@@ -403,7 +410,11 @@ def _build_social_dna_run(hero: Hero) -> dict[str, Any]:
     }
 
 
-def create_or_update_hero(session: Session, payload: HeroCreate) -> dict[str, Any]:
+def create_or_update_hero(
+        session: Session, 
+        payload: HeroCreate,
+        user_id: int,    
+    ) -> dict[str, Any]:
     validation = validate_hero_window(
         ticker=payload.ticker,
         start_date=payload.start_date,
@@ -412,6 +423,7 @@ def create_or_update_hero(session: Session, payload: HeroCreate) -> dict[str, An
 
     existing = session.scalar(
         select(Hero).where(
+            Hero.user_id == user_id,
             Hero.ticker == payload.ticker,
             Hero.start_date == payload.start_date,
             Hero.end_date == payload.end_date,
@@ -437,6 +449,7 @@ def create_or_update_hero(session: Session, payload: HeroCreate) -> dict[str, An
         return _hero_response(existing)
 
     hero = Hero(
+        user_id=user_id,
         ticker=payload.ticker,
         name=validation["name"],
         title=title,
@@ -453,13 +466,19 @@ def create_or_update_hero(session: Session, payload: HeroCreate) -> dict[str, An
     return _hero_response(hero)
 
 
-def list_saved_heroes(session: Session) -> list[dict[str, Any]]:
-    heroes = session.scalars(select(Hero).order_by(Hero.updated_at.desc(), Hero.created_at.desc())).all()
+def list_saved_heroes(session: Session, user_id: int) -> list[dict[str, Any]]:
+    heroes = session.scalars(
+        select(Hero)
+        .where(Hero.status == "active",
+               Hero.user_id == user_id,
+        )
+        .order_by(Hero.updated_at.desc(), Hero.created_at.desc())
+        ).all()
     return [_hero_response(hero) for hero in heroes]
 
 
-def get_saved_hero(session: Session, hero_id: int) -> dict[str, Any] | None:
-    hero = session.get(Hero, hero_id)
+def get_saved_hero(session: Session, hero_id: int, user_id: int) -> dict[str, Any] | None:
+    hero = _get_user_hero(session, hero_id, user_id)
     if hero is None:
         return None
     return _hero_response(hero)
@@ -497,7 +516,11 @@ def _serialize_search_run(run: SearchRun) -> dict[str, Any]:
     }
 
 
-def list_search_runs_for_hero(session: Session, hero_id: int) -> list[dict[str, Any]]:
+def list_search_runs_for_hero(session: Session, hero_id: int, user_id: int) -> list[dict[str, Any]]:
+    hero = _get_user_hero(session, hero_id, user_id)
+    if hero is None:
+        return []
+    
     runs = session.scalars(
         select(SearchRun)
         .where(SearchRun.hero_id == hero_id)
@@ -532,10 +555,13 @@ def list_search_runs_for_hero(session: Session, hero_id: int) -> list[dict[str, 
     return summaries
 
 
-def get_search_run(session: Session, search_run_id: int) -> dict[str, Any] | None:
+def get_search_run(session: Session, search_run_id: int, user_id: int) -> dict[str, Any] | None:
     run = session.scalar(
         select(SearchRun)
-        .where(SearchRun.id == search_run_id)
+        .join(SearchRun.hero)
+        .where(SearchRun.id == search_run_id,
+               Hero.user_id == user_id,
+        )
         .options(selectinload(SearchRun.matches))
     )
     if run is None:
@@ -543,24 +569,37 @@ def get_search_run(session: Session, search_run_id: int) -> dict[str, Any] | Non
     return _serialize_search_run(run)
 
 
-def _build_search_payload(hero: Hero, mode: Mode) -> dict[str, Any]:
+def _build_search_payload(hero: Hero, mode: Mode, market: str = "us") -> dict[str, Any]:
     validate_hero_window(hero.ticker, hero.start_date, hero.end_date)
 
     if mode == "price_dna":
-        return _build_price_dna_run(hero)
+        return _build_price_dna_run(hero, market=market)
     if mode == "economic_dna":
         return _build_economic_dna_run(hero)
     if mode == "social_dna":
         return _build_social_dna_run(hero)
     raise ValueError(f"Unsupported search mode: {mode}")
 
+def _get_user_hero(session: Session, hero_id: int, user_id: int) -> Hero | None:
+    return session.scalar(
+        select(Hero).where(
+            Hero.id == hero_id,
+            Hero.user_id == user_id,
+        )
+    )
 
-def run_search_for_hero(session: Session, hero_id: int, mode: Mode) -> dict[str, Any]:
-    hero = session.get(Hero, hero_id)
+def run_search_for_hero(
+    session: Session,
+    hero_id: int,
+    mode: Mode,
+    user_id: int,
+    market: str = "us",
+) -> dict[str, Any]:
+    hero = _get_user_hero(session, hero_id, user_id)
     if hero is None:
         raise LookupError(f"Hero {hero_id} was not found")
 
-    payload = _build_search_payload(hero, mode)
+    payload = _build_search_payload(hero, mode, market=market)
 
     search_run = SearchRun(
         hero_id=hero.id,
@@ -593,11 +632,11 @@ def run_search_for_hero(session: Session, hero_id: int, mode: Mode) -> dict[str,
         )
 
     session.commit()
-    return get_search_run(session, search_run.id)
+    return get_search_run(session, search_run.id, user_id)
 
 
-def seed_sample_heroes(session: Session) -> None:
-    has_heroes = session.scalar(select(Hero.id).limit(1))
+def seed_sample_heroes(session: Session, user_id: int) -> None:
+    has_heroes = session.scalar(select(Hero.id).where(Hero.user_id == user_id).limit(1))
     if has_heroes is not None:
         return
 
@@ -612,12 +651,13 @@ def seed_sample_heroes(session: Session) -> None:
                     start_date=date.fromisoformat(str(hero_data["start_date"])),
                     end_date=date.fromisoformat(str(hero_data["end_date"])),
                 ),
+                user_id=user_id,
             )
         except (LookupError, ValueError):
             session.rollback()
 
-def archive_hero(session: Session, hero_id: int) -> dict[str, Any]:
-    hero = session.get(Hero, hero_id)
+def archive_hero(session: Session, hero_id: int, user_id: int) -> dict[str, Any]:
+    hero = _get_user_hero(session, hero_id, user_id)
     if hero is None: 
         raise LookupError(f"Hero {hero_id} was not found")
     

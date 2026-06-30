@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -5,12 +8,31 @@ import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-PRICES_PATH = DATA_DIR / "prices.csv"
-WINDOWS_OUT = DATA_DIR / "training_windows.npz"
-META_OUT = DATA_DIR / "training_windows_meta.csv"
 
 WINDOW_SIZE = 40
 MIN_HISTORY = 60
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Build sliding-window training data from a prices CSV.",
+    )
+    parser.add_argument(
+        "--market",
+        choices=["us", "cn"],
+        default="us",
+        help="Market to build training data for. Determines input/output file paths.",
+    )
+    return parser.parse_args()
+
+
+def _paths(market: str):
+    suffix = "_cn" if market == "cn" else ""
+    return (
+        DATA_DIR / f"prices{suffix}.csv",
+        DATA_DIR / f"training_windows{suffix}.npz",
+        DATA_DIR / f"training_windows_meta{suffix}.csv",
+    )
 
 
 def load_prices(path: Path) -> pd.DataFrame:
@@ -69,16 +91,25 @@ def build_windows(df: pd.DataFrame, window_size: int = WINDOW_SIZE):
 
 
 def main():
-    df = load_prices(PRICES_PATH)
+    args = parse_args()
+    prices_path, windows_out, meta_out = _paths(args.market)
+
+    if not prices_path.exists():
+        raise SystemExit(
+            f"Price file not found: {prices_path}\n"
+            f"Run the appropriate fetcher first (e.g. fetch_prices_akshare.py for cn)."
+        )
+
+    df = load_prices(prices_path)
     X, meta_df = build_windows(df)
 
-    np.savez_compressed(WINDOWS_OUT, X=X)
-    meta_df.to_csv(META_OUT, index=False)
+    np.savez_compressed(windows_out, X=X)
+    meta_df.to_csv(meta_out, index=False)
 
-    print("Built training data")
+    print(f"Built training data for market={args.market}")
     print("X shape:", X.shape)
-    print("Saved:", WINDOWS_OUT)
-    print("Saved:", META_OUT)
+    print("Saved:", windows_out)
+    print("Saved:", meta_out)
 
 
 if __name__ == "__main__":

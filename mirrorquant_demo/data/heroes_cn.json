@@ -1,0 +1,107 @@
+[
+  {
+    "ticker": "600519",
+    "name": "贵州茅台 (Kweichow Moutai)",
+    "window_label": "Consumer premium re-rating",
+    "start_date": "2023-01-03",
+    "end_date": "2023-06-30",
+    "summary": "A post-reopening quality accumulation phase — premium consumer brands repriced as domestic demand recovery expectations solidified and institutional positioning rebuilt.",
+    "price_dna": {
+      "regime_code": "QUALITY_REBOUND_03",
+      "confidence": 0.91,
+      "traits": [
+        "Low-volatility uptrend after suppression",
+        "Persistent institutional accumulation",
+        "Relative outperformance vs. broad A-share"
+      ]
+    },
+    "economic_dna": {
+      "regime_code": "DOMESTIC_RECOVERY_02",
+      "confidence": 0.84,
+      "traits": [
+        "Post-COVID consumption rebound",
+        "Premium pricing power intact",
+        "Supportive policy backdrop"
+      ]
+    },
+    "social_dna": {
+      "regime_code": "BRAND_CONFIDENCE_04",
+      "confidence": 0.79,
+      "traits": [
+        "High media attention on reopening theme",
+        "Positive gifting-season narrative",
+        "Low controversy relative to sector"
+      ]
+    }
+  },
+  {
+    "ticker": "300750",
+    "name": "宁德时代 (CATL)",
+    "window_label": "EV supply-chain dominance",
+    "start_date": "2023-06-01",
+    "end_date": "2023-09-30",
+    "summary": "A cyclical demand-shock window where CATL's battery shipment momentum, global supply-chain lock-ins, and overseas expansion narrative drove persistent relative strength.",
+    "price_dna": {
+      "regime_code": "EXPANSION_08",
+      "confidence": 0.93,
+      "traits": [
+        "Gap-and-go continuation behavior",
+        "High-beta leadership within ChiNext",
+        "Volume surge on breakout days"
+      ]
+    },
+    "economic_dna": {
+      "regime_code": "CAPEX_CYCLE_05",
+      "confidence": 0.81,
+      "traits": [
+        "Global EV penetration acceleration",
+        "Supply-chain vertical integration premium",
+        "Policy tailwind from NEV subsidies"
+      ]
+    },
+    "social_dna": {
+      "regime_code": "THEME_SATURATION_07",
+      "confidence": 0.88,
+      "traits": [
+        "Narrative dominance in clean energy",
+        "High analyst coverage concentration",
+        "Positive overseas-deal news flow"
+      ]
+    }
+  },
+  {
+    "ticker": "600036",
+    "name": "招商银行 (China Merchants Bank)",
+    "window_label": "Quality bank defensive bid",
+    "start_date": "2023-09-01",
+    "end_date": "2024-01-31",
+    "summary": "A low-drama defensive regime where CMB's superior retail franchise and high ROE attracted capital when growth names faced headwinds from property sector uncertainty.",
+    "price_dna": {
+      "regime_code": "DEFENSIVE_ACCUMULATION_06",
+      "confidence": 0.86,
+      "traits": [
+        "Orderly range-to-breakout structure",
+        "Lower drawdown than sector peers",
+        "Steady institutional buying on dips"
+      ]
+    },
+    "economic_dna": {
+      "regime_code": "CREDIT_CYCLE_LATE_04",
+      "confidence": 0.78,
+      "traits": [
+        "NIM stabilization narrative",
+        "Dividend yield as anchor vs. falling rates",
+        "Selective credit quality premium"
+      ]
+    },
+    "social_dna": {
+      "regime_code": "QUALITY_FLIGHT_02",
+      "confidence": 0.74,
+      "traits": [
+        "Positive retail banking brand perception",
+        "Low negative news flow vs. peers",
+        "Moderate analyst attention, high conviction"
+      ]
+    }
+  }
+]

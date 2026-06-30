@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -9,8 +12,24 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-WINDOWS_PATH = DATA_DIR / "training_windows.npz"
-MODEL_PATH = DATA_DIR / "vqvae_model.pt"
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train the VQ-VAE model on a windows NPZ file.")
+    parser.add_argument(
+        "--market",
+        choices=["us", "cn"],
+        default="us",
+        help="Market to train for. Determines input/output file paths.",
+    )
+    return parser.parse_args()
+
+
+def _paths(market: str):
+    suffix = "_cn" if market == "cn" else ""
+    return (
+        DATA_DIR / f"training_windows{suffix}.npz",
+        DATA_DIR / f"vqvae_model{suffix}.pt",
+    )
 
 BATCH_SIZE = 32
 EPOCHS = 40
@@ -67,8 +86,8 @@ class VQVAE(nn.Module):
         return x_recon, z_e, z_q, codebook_loss, commitment_loss, encoding_indices
 
 
-def load_training_data():
-    data = np.load(WINDOWS_PATH)
+def load_training_data(path: Path):
+    data = np.load(path)
     X = data["X"].astype(np.float32)
     return X
 
@@ -151,13 +170,22 @@ def inspect_code_usage(model, X_flat: np.ndarray, device="cpu"):
 
 
 def main():
+    args = parse_args()
+    windows_path, model_path = _paths(args.market)
+
+    if not windows_path.exists():
+        raise SystemExit(
+            f"Training windows not found: {windows_path}\n"
+            f"Run: python build_training_data.py --market {args.market}"
+        )
+
     torch.manual_seed(SEED)
     np.random.seed(SEED)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Using device:", device)
+    print(f"Training for market={args.market} | device={device}")
 
-    X = load_training_data()
+    X = load_training_data(windows_path)
     print("Original X shape:", X.shape)
 
     X_norm, mean, std = normalize_windows(X)
@@ -196,10 +224,10 @@ def main():
             "window_size": X.shape[1],
             "num_features": X.shape[2],
         },
-        MODEL_PATH,
+        model_path,
     )
 
-    print("Saved model to:", MODEL_PATH)
+    print("Saved model to:", model_path)
 
 
 if __name__ == "__main__":

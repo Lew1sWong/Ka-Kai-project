@@ -685,35 +685,37 @@ label,
 }
 
 .page {
-  max-width: 1360px;
+  width: min(1760px, calc(100% - 56px));
+  max-width: none;
   margin: 0 auto;
-  padding: 28px 20px 56px;
+  padding: 32px 0 72px;
 }
 
 .app-shell {
   display: grid;
-  gap: 22px;
+  gap: 28px;
 }
 
 .workspace-frame {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 364px minmax(0, 1fr);
+  gap: 32px;
   align-items: start;
 }
 
 .workspace-content {
   display: grid;
-  gap: 22px;
+  gap: 30px;
 }
 
 .app-topbar {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
+  gap: 22px;
   align-items: center;
-  padding: 18px 20px;
+  padding: 28px 32px;
   border-radius: 22px;
+  min-height: 126px;
 }
 
 .dashboard-topbar {
@@ -726,52 +728,259 @@ label,
   position: sticky;
   top: 18px;
   display: grid;
+  grid-template-rows: auto auto 1fr auto;
   gap: 18px;
-  padding: 18px 16px;
+  min-height: calc(100vh - 44px);
+  padding: 22px 18px 18px;
+  border-radius: 30px;
+  overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(155, 192, 255, 0.05), transparent 100%),
-    rgba(5, 10, 16, 0.9);
+    linear-gradient(180deg, rgba(155, 192, 255, 0.07), transparent 100%),
+    linear-gradient(180deg, rgba(102, 240, 203, 0.045), transparent 24%),
+    rgba(5, 10, 16, 0.94);
 }
 
-.workspace-quicklinks-head h3 {
-  margin: 10px 0 0;
-  font-size: 1.05rem;
-  font-family: "IBM Plex Mono", monospace;
+.workspace-brand {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 8px 8px 18px;
+  background: transparent;
+  color: var(--bg-ink);
+  text-align: left;
+  border-bottom: 1px solid rgba(155, 192, 255, 0.08);
 }
 
-.workspace-quicklinks-head p:last-child {
-  margin: 8px 0 0;
+.workspace-brand-mark {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(102, 240, 203, 0.24), transparent 52%),
+    linear-gradient(145deg, rgba(11, 24, 38, 0.96), rgba(5, 10, 16, 0.98));
+  border: 1px solid rgba(102, 240, 203, 0.14);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: auto 10px 10px auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(102, 240, 203, 0.6), transparent 72%);
+  filter: blur(6px);
+}
+
+.workspace-brand-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.28);
+}
+
+.workspace-brand-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-brand-copy strong {
+  font-size: 1.26rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-brand-copy small {
+  color: var(--bg-muted);
+  line-height: 1.45;
+  max-width: 18ch;
+}
+
+.workspace-quicklinks-head {
+  padding: 0 8px;
+}
+
+.workspace-quicklinks-head .app-eyebrow {
+  margin: 0;
+  letter-spacing: 0.28em;
 }
 
 .workspace-quicklinks-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  align-content: start;
 }
 
 .workspace-quicklink {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(155, 192, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--bg-ink);
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--bg-muted);
   text-align: left;
   box-shadow: none;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.workspace-quicklink::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14%;
+  bottom: 14%;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(102, 240, 203, 1), rgba(83, 202, 255, 0.88));
+  opacity: 0;
+  transform: scaleY(0.45);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .workspace-quicklink:hover {
-  background: rgba(102, 240, 203, 0.08);
-  border-color: rgba(102, 240, 203, 0.22);
+  background: rgba(102, 240, 203, 0.06);
+  color: var(--bg-ink);
 }
 
-.workspace-quicklink-index {
-  min-width: 28px;
-  color: var(--gold);
-  font-size: 0.72rem;
-  font-family: "IBM Plex Mono", monospace;
+.workspace-quicklink.is-active {
+  background:
+    linear-gradient(90deg, rgba(9, 57, 49, 0.78), rgba(8, 29, 33, 0.52)),
+    rgba(9, 17, 26, 0.92);
+  border-color: rgba(102, 240, 203, 0.18);
+  color: var(--bg-ink);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+.workspace-quicklink:hover::before,
+.workspace-quicklink.is-active::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.workspace-quicklink-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(155, 192, 255, 0.06);
+}
+
+.workspace-quicklink.is-active .workspace-quicklink-icon {
+  background: rgba(102, 240, 203, 0.1);
+  border-color: rgba(102, 240, 203, 0.16);
+}
+
+.workspace-nav-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-quicklink-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-quicklink-copy strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.workspace-quicklink-copy small {
+  color: rgba(143, 168, 190, 0.76);
+}
+
+.workspace-quicklink.is-active .workspace-quicklink-copy small,
+.workspace-quicklink:hover .workspace-quicklink-copy small {
+  color: rgba(234, 245, 255, 0.72);
+}
+
+.workspace-quicklinks-footer {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 16px 8px 0;
+  border-top: 1px solid rgba(155, 192, 255, 0.08);
+}
+
+.workspace-quicklinks-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(143, 168, 190, 0.88);
+  font-size: 0.82rem;
+}
+
+.workspace-quicklinks-user-email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-live-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 14px rgba(102, 240, 203, 0.92);
+}
+
+.workspace-sidebar-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(155, 192, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 100%),
+    linear-gradient(140deg, rgba(102, 240, 203, 0.07), transparent 55%),
+    rgba(7, 14, 22, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.workspace-sidebar-card-title {
+  margin: 0;
+  color: var(--bg-ink);
+  font-weight: 600;
+}
+
+.workspace-sidebar-card-copy {
+  margin: 0;
+  color: rgba(143, 168, 190, 0.86);
+  line-height: 1.55;
+}
+
+.workspace-sidebar-card strong {
+  color: var(--mint);
+  font-size: 1.55rem;
+  letter-spacing: 0.03em;
+}
+
+.workspace-sidebar-card span {
+  color: rgba(234, 245, 255, 0.72);
+  font-size: 0.86rem;
 }
 
 .app-topbar-actions {
@@ -793,20 +1002,20 @@ label,
 
 .workspace-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.8fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(380px, 0.95fr);
+  gap: 28px;
   align-items: stretch;
 }
 
 .workspace-command,
 .workspace-status-card {
-  padding: 24px;
+  padding: 30px;
   border-radius: 28px;
 }
 
 .workspace-command {
   display: grid;
-  gap: 24px;
+  gap: 30px;
   background:
     radial-gradient(circle at top right, rgba(18, 214, 154, 0.14), transparent 28%),
     linear-gradient(180deg, rgba(155, 192, 255, 0.08), transparent 62%),
@@ -820,11 +1029,11 @@ label,
 .workspace-command-band {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 20px;
 }
 
 .workspace-band-card {
-  padding: 16px 18px;
+  padding: 20px 22px;
   border-radius: 18px;
   border: 1px solid rgba(155, 192, 255, 0.12);
   background:
@@ -840,19 +1049,19 @@ label,
 }
 
 .workspace-band-card p {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
 }
 
 .workspace-overview-side {
   display: grid;
-  gap: 18px;
+  gap: 24px;
 }
 
 .workspace-regime-card {
-  min-height: 190px;
+  min-height: 238px;
   display: grid;
   align-content: end;
-  gap: 10px;
+  gap: 12px;
   border-radius: 28px;
 }
 
@@ -863,13 +1072,13 @@ label,
 
 .workspace-status-card {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .workspace-status-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
 }
 
@@ -882,7 +1091,7 @@ label,
 .workspace-status-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .dashboard-summary-band {
@@ -1035,15 +1244,15 @@ label,
 .controls {
   display: grid;
   grid-template-columns: 1.1fr 1fr 0.9fr 0.9fr 0.9fr;
-  gap: 12px;
+  gap: 14px;
   padding: 16px;
   align-items: flex-end;
 }
 
 .workspace-controls {
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-  padding: 22px;
+  gap: 18px;
+  padding: 28px;
   background:
     linear-gradient(180deg, rgba(255, 170, 22, 0.05), transparent 38%),
     rgba(6, 11, 18, 0.92);
@@ -1051,7 +1260,7 @@ label,
 
 .controls-header {
   grid-column: 1 / -1;
-  padding-bottom: 10px;
+  padding-bottom: 14px;
 }
 
 .controls-header h2 {
@@ -1071,7 +1280,7 @@ label {
 input,
 select {
   width: 100%;
-  padding: 12px 13px;
+  padding: 14px 15px;
   border-radius: 12px;
   border: 1px solid var(--line-strong);
   background: rgba(5, 10, 16, 0.96);
@@ -1162,8 +1371,8 @@ button:focus {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.78fr) minmax(0, 1.25fr) minmax(300px, 0.88fr);
-  gap: 18px;
+  grid-template-columns: minmax(320px, 0.88fr) minmax(0, 1.45fr) minmax(340px, 0.98fr);
+  gap: 28px;
   align-items: start;
 }
 
@@ -1171,7 +1380,7 @@ button:focus {
 .workspace-main,
 .workspace-context {
   display: grid;
-  gap: 18px;
+  gap: 28px;
 }
 
 .workspace-panel {
@@ -1189,13 +1398,14 @@ button:focus {
 
 .summary-band {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .summary-tile {
   position: relative;
   overflow: hidden;
-  padding: 14px;
+  padding: 18px 18px 20px;
+  min-height: 118px;
   background:
     linear-gradient(180deg, rgba(155, 192, 255, 0.05), transparent 84%),
     var(--panel-strong);
@@ -1229,7 +1439,7 @@ button:focus {
 .panel {
   position: relative;
   overflow: hidden;
-  padding: 16px;
+  padding: 22px;
 }
 
 .panel::before {
@@ -1243,8 +1453,8 @@ button:focus {
 }
 
 .panel-header {
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid rgba(132, 156, 180, 0.14);
 }
 
@@ -1262,11 +1472,11 @@ button:focus {
 .stack,
 .saved-collection,
 .chain-list {
-  gap: 12px;
+  gap: 16px;
 }
 
 .card {
-  padding: 14px;
+  padding: 18px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--card);
@@ -1291,7 +1501,7 @@ button:focus {
 .hero-chart-shell {
   position: relative;
   min-height: 240px;
-  margin: 10px 0 12px;
+  margin: 14px 0 16px;
   border-radius: 10px;
   border: 1px solid rgba(155, 192, 255, 0.16);
   background:
@@ -1447,9 +1657,9 @@ button:focus {
 .metric-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 12px 0 10px;
-  padding: 12px;
+  gap: 14px;
+  margin: 16px 0 14px;
+  padding: 16px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.018);
   border: 1px solid rgba(155, 192, 255, 0.16);
@@ -1506,7 +1716,7 @@ button:focus {
 .sparkline-shell {
   position: relative;
   height: 46px;
-  margin: 10px 0 12px;
+  margin: 14px 0 16px;
   border-radius: 8px;
   border: 1px solid rgba(155, 192, 255, 0.14);
   background:
@@ -1684,7 +1894,7 @@ button:focus {
 }
 
 .chain-item {
-  padding: 12px;
+  padding: 16px;
   border-radius: 8px;
   border: 1px solid rgba(130, 163, 211, 0.18);
   background: var(--card-soft);
@@ -1692,7 +1902,7 @@ button:focus {
 
 .saved-item {
   width: 100%;
-  padding: 15px 16px;
+  padding: 18px 18px;
   text-align: left;
   border-radius: 16px;
   background: rgba(11, 18, 26, 0.92);
@@ -1765,6 +1975,7 @@ button:focus {
 
   .workspace-quicklinks {
     position: static;
+    min-height: auto;
   }
 }
 
@@ -1821,7 +2032,8 @@ button:focus {
   }
 
   .page {
-    padding-inline: 14px;
+    width: min(100%, calc(100% - 20px));
+    padding-bottom: 56px;
   }
 
   .workspace-status-head,
@@ -1832,5 +2044,14 @@ button:focus {
 
   .workspace-quicklink {
     justify-content: flex-start;
+  }
+
+  .workspace-brand {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .workspace-brand-mark {
+    width: 72px;
+    height: 72px;
   }
 }

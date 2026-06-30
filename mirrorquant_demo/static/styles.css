@@ -872,6 +872,22 @@ button:focus {
   background: rgba(102, 240, 203, 0.1);
 }
 
+.archive-button {
+  background: rgba(255, 200, 107, 0.08);
+  color: var(--gold);
+  border: 1px solid rgba(255, 200, 107, 0.3);
+  box-shadow: none;
+}
+
+.archive-button:hover {
+  background: rgba(255, 200, 107, 0.14);
+}
+
+.archive-button:disabled {
+  color: var(--bg-muted);
+  border-color: rgba(132, 156, 180, 0.18);
+}
+
 .context-text {
   margin: 0;
 }

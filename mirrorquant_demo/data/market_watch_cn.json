@@ -1,0 +1,56 @@
+{
+  "as_of": "2025-05-25",
+  "headline_regime": "Rotation-driven tape, sector selectivity",
+  "indicators": [
+    {
+      "symbol": "510300",
+      "name": "A-Share Blue Chips (CSI 300)",
+      "value": "3.85",
+      "status": "Range-bound",
+      "insight": "510300 tracks the CSI 300 — China's 300 largest A-share companies. Its trend gives the clearest read on institutional sentiment toward onshore blue chips.",
+      "series": [],
+      "change_pct": 0.0,
+      "as_of": "2025-05-25"
+    },
+    {
+      "symbol": "159915",
+      "name": "ChiNext Growth",
+      "value": "1.92",
+      "status": "Range-bound",
+      "insight": "159915 tracks ChiNext — China's growth and technology board. High-beta relative to the CSI 300; its spread signals risk appetite for domestic growth names.",
+      "series": [],
+      "change_pct": 0.0,
+      "as_of": "2025-05-25"
+    },
+    {
+      "symbol": "510500",
+      "name": "Mid/Small-Cap Breadth (CSI 500)",
+      "value": "5.40",
+      "status": "Range-bound",
+      "insight": "510500 tracks the CSI 500 — mid-to-small A-share companies. Breadth here signals whether the rally has legs beyond the top-cap concentration.",
+      "series": [],
+      "change_pct": 0.0,
+      "as_of": "2025-05-25"
+    },
+    {
+      "symbol": "511010",
+      "name": "Duration / Rates (CGB ETF)",
+      "value": "108.50",
+      "status": "Range-bound",
+      "insight": "511010 tracks 10-year Chinese government bonds. Rising price means falling yields — a flight-to-safety or PBOC easing signal that compresses the equity risk premium.",
+      "series": [],
+      "change_pct": 0.0,
+      "as_of": "2025-05-25"
+    },
+    {
+      "symbol": "511380",
+      "name": "Credit Appetite (Conv. Bond ETF)",
+      "value": "113.20",
+      "status": "Range-bound",
+      "insight": "511380 tracks convertible bonds — a hybrid instrument sensitive to both credit spreads and equity volatility. Its trend is a leading read on risk-on/risk-off in domestic credit markets.",
+      "series": [],
+      "change_pct": 0.0,
+      "as_of": "2025-05-25"
+    }
+  ]
+}
