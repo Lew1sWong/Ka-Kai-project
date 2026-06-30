@@ -5,6 +5,7 @@ aiofiles>=23.2.1
 python-multipart>=0.0.9
 pydantic>=2.7.0
 python-dotenv>=1.0.0
+itsdangerous>=2.2.0
 
 # Volcengine SDK  (VisualService — cv_submit_task / cv_get_result)
 volcengine>=1.0.98

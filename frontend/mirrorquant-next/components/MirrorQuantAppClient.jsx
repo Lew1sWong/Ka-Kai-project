@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 const API_BASE = (
@@ -52,6 +53,95 @@ const capabilityCards = [
     copy: "Layer live or proxy market-watch context on top of search output so the match is anchored in current tape conditions.",
   },
 ];
+const workspaceSidebarItems = [
+  { id: "workspace-command-center", label: "Overview", detail: "Command center", icon: "overview" },
+  { id: "workspace-launchpad", label: "Launchpad", detail: "Signal setup", icon: "launchpad" },
+  { id: "workspace-saved-heroes", label: "Saved Heroes", detail: "Reusable windows", icon: "heroes" },
+  { id: "workspace-search-history", label: "Search History", detail: "Ranked runs", icon: "history" },
+  { id: "workspace-hero-window", label: "Hero Window", detail: "Price view", icon: "window" },
+  { id: "workspace-mirror-matches", label: "Mirror Matches", detail: "Top analogs", icon: "matches" },
+  { id: "workspace-market-watch", label: "Market Watch", detail: "Tape context", icon: "watch" },
+  { id: "workspace-industry-chain", label: "Industry Chain", detail: "Peer links", icon: "chain" },
+];
+
+function WorkspaceSidebarIcon({ icon }) {
+  const commonProps = {
+    className: "workspace-nav-icon",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+  };
+
+  switch (icon) {
+    case "overview":
+      return (
+        <svg {...commonProps}>
+          <rect x="4" y="4" width="6" height="6" rx="1.4" />
+          <rect x="14" y="4" width="6" height="6" rx="1.4" />
+          <rect x="4" y="14" width="6" height="6" rx="1.4" />
+          <rect x="14" y="14" width="6" height="6" rx="1.4" />
+        </svg>
+      );
+    case "launchpad":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 16.5c2.6 0 2.6-9 5.2-9s2.6 9 5.2 9 2.6-6 3.1-6" />
+          <path d="M17.3 10.5 19.5 10l.5 2.2" />
+        </svg>
+      );
+    case "heroes":
+      return (
+        <svg {...commonProps}>
+          <path d="M7 5.5h8a2 2 0 0 1 2 2v11l-6-3-6 3v-11a2 2 0 0 1 2-2Z" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...commonProps}>
+          <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+          <path d="M4.5 6.5v4h4" />
+          <path d="M12 8.5v4l2.8 1.7" />
+        </svg>
+      );
+    case "window":
+      return (
+        <svg {...commonProps}>
+          <rect x="4" y="5" width="16" height="14" rx="2.4" />
+          <path d="M4 9.5h16" />
+          <path d="m9 15 2.5-2.5 2 2 3.5-4" />
+        </svg>
+      );
+    case "matches":
+      return (
+        <svg {...commonProps}>
+          <path d="M7 7h9.5" />
+          <path d="m13.5 3.5 3.5 3.5-3.5 3.5" />
+          <path d="M17 17H7.5" />
+          <path d="m10.5 20.5-3.5-3.5 3.5-3.5" />
+        </svg>
+      );
+    case "watch":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 4.5 6.2 7v5c0 3.8 2.2 6.3 5.8 7.5 3.6-1.2 5.8-3.7 5.8-7.5V7L12 4.5Z" />
+          <path d="m9.5 12 1.6 1.7 3.5-3.7" />
+        </svg>
+      );
+    case "chain":
+      return (
+        <svg {...commonProps}>
+          <path d="M9.5 8.5 7 11a3 3 0 0 0 4.2 4.2l2.3-2.3" />
+          <path d="m14.5 15.5 2.5-2.5A3 3 0 0 0 12.8 8.8l-2.3 2.3" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
 
 function apiUrl(path) {
   return `${API_BASE}${path}`;
@@ -639,6 +729,7 @@ function HeroCard({ hero, run, heroSeries }) {
 
 function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = null }) {
   const [showApp, setShowApp] = useState(initialView === "workspace");
+  const [activeWorkspaceSection, setActiveWorkspaceSection] = useState("workspace-command-center");
   const [savedHeroes, setSavedHeroes] = useState([]);
   const [currentHero, setCurrentHero] = useState(null);
   const [currentSearchRuns, setCurrentSearchRuns] = useState([]);
@@ -700,6 +791,39 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   useEffect(() => {
     document.body.classList.toggle("landing-active", !showApp);
     return () => document.body.classList.remove("landing-active");
+  }, [showApp]);
+
+  useEffect(() => {
+    if (!showApp) {
+      return undefined;
+    }
+
+    const sections = workspaceSidebarItems
+      .map((item) => document.getElementById(item.id))
+      .filter(Boolean);
+
+    if (!sections.length) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const nextActive = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (nextActive?.target?.id) {
+          setActiveWorkspaceSection(nextActive.target.id);
+        }
+      },
+      {
+        rootMargin: "-20% 0px -55% 0px",
+        threshold: [0.15, 0.35, 0.6],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
   }, [showApp]);
 
   useEffect(() => {
@@ -999,6 +1123,7 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   }
 
   function scrollToWorkspaceSection(sectionId) {
+    setActiveWorkspaceSection(sectionId);
     document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1082,6 +1207,20 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
   const topMatchLabel = topMatch
     ? `${topMatch.ticker} ${Math.round(topMatch.score * 100)}%`
     : "No saved match";
+  const sidebarSnapshotTitle = topMatch
+    ? "Snapshot ready"
+    : currentHero
+      ? "Hero armed"
+      : "Awaiting setup";
+  const sidebarSnapshotMeta = currentSearchRun
+    ? `${summaryMode} · ${summaryBackend}`
+    : currentHero
+      ? `${activeHeroLabel} ready for search`
+      : "Save a hero window to arm the workspace.";
+  const sidebarSnapshotValue = topMatch
+    ? topMatchLabel
+    : `${heroCount} saved hero${heroCount === 1 ? "" : "es"}`;
+  const sidebarSnapshotFootnote = `${runCount} saved run${runCount === 1 ? "" : "s"} in workspace`;
 
   if (showApp && authLoading) {
     return (
@@ -1442,44 +1581,62 @@ function App({ initialView = "landing", onEnterPlatform = null, onShowLanding = 
 
           <div className="workspace-frame">
             <aside className="panel workspace-quicklinks" aria-label="Workspace quicklinks">
+              <button
+                type="button"
+                className="workspace-brand"
+                onClick={() => scrollToWorkspaceSection("workspace-command-center")}
+                aria-label="Jump to MirrorQuant overview"
+              >
+                <span className="workspace-brand-mark">
+                  <Image
+                    src="/mirrorquant-logo.png"
+                    alt="MirrorQuant logo"
+                    width={72}
+                    height={72}
+                    className="workspace-brand-image"
+                  />
+                </span>
+                <span className="workspace-brand-copy">
+                  <strong>MirrorQuant</strong>
+                  <small>Discover patterns. See opportunities.</small>
+                </span>
+              </button>
               <div className="workspace-quicklinks-head">
-                <p className="app-eyebrow">Quicklinks</p>
-                <h3>Jump through the workspace</h3>
-                <p className="panel-kicker">Fast navigation for the main research blocks.</p>
+                <p className="app-eyebrow">Workspace</p>
               </div>
-              <div className="workspace-quicklinks-list">
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-command-center")}>
-                  <span className="workspace-quicklink-index">01</span>
-                  <span>Command Center</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-launchpad")}>
-                  <span className="workspace-quicklink-index">02</span>
-                  <span>Signal Launchpad</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-saved-heroes")}>
-                  <span className="workspace-quicklink-index">03</span>
-                  <span>Saved Heroes</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-search-history")}>
-                  <span className="workspace-quicklink-index">04</span>
-                  <span>Search History</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-hero-window")}>
-                  <span className="workspace-quicklink-index">05</span>
-                  <span>Hero Window</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-mirror-matches")}>
-                  <span className="workspace-quicklink-index">06</span>
-                  <span>Mirror Matches</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-market-watch")}>
-                  <span className="workspace-quicklink-index">07</span>
-                  <span>Market Watch</span>
-                </button>
-                <button type="button" className="workspace-quicklink" onClick={() => scrollToWorkspaceSection("workspace-industry-chain")}>
-                  <span className="workspace-quicklink-index">08</span>
-                  <span>Industry Chain</span>
-                </button>
+              <nav className="workspace-quicklinks-list" aria-label="Workspace sections">
+                {workspaceSidebarItems.map((item) => {
+                  const isActive = activeWorkspaceSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`workspace-quicklink ${isActive ? "is-active" : ""}`}
+                      onClick={() => scrollToWorkspaceSection(item.id)}
+                      aria-current={isActive ? "true" : undefined}
+                    >
+                      <span className="workspace-quicklink-icon">
+                        <WorkspaceSidebarIcon icon={item.icon} />
+                      </span>
+                      <span className="workspace-quicklink-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="workspace-quicklinks-footer">
+                <div className="workspace-quicklinks-user">
+                  <span className="workspace-quicklinks-user-email">{currentUser?.email}</span>
+                  <span className="workspace-live-dot" aria-hidden="true"></span>
+                </div>
+                <article className="workspace-sidebar-card">
+                  <p className="workspace-sidebar-card-title">{sidebarSnapshotTitle}</p>
+                  <p className="workspace-sidebar-card-copy">{sidebarSnapshotMeta}</p>
+                  <strong>{sidebarSnapshotValue}</strong>
+                  <span>{sidebarSnapshotFootnote}</span>
+                </article>
               </div>
             </aside>
 
