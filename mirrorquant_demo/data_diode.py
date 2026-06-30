@@ -38,6 +38,44 @@ from mirrorquant_demo.data_diode_models import IntelligencePacket
 TRANSFER_DIRECTION = "external_to_internal_only"
 ALLOWED_CLASSIFICATION = "public"
 
+# The one-way mechanism is user-selectable per deployment (contract Art. 3.3):
+#   - enabled on/off via MIRRORQUANT_DIODE_ENABLED
+#   - scheme via MIRRORQUANT_DIODE_MODE: software (default) | offline | physical
+DIODE_MODES = ("software", "offline", "physical")
+
+
+class DiodeDisabled(RuntimeError):
+    """Raised when the one-way data transfer mechanism is turned off by config."""
+
+
+def is_enabled() -> bool:
+    return os.getenv("MIRRORQUANT_DIODE_ENABLED", "true").strip().lower() not in {
+        "0", "false", "no", "off",
+    }
+
+
+def mode() -> str:
+    m = os.getenv("MIRRORQUANT_DIODE_MODE", "software").strip().lower()
+    return m if m in DIODE_MODES else "software"
+
+
+def _mode_note(current: str) -> str:
+    if current == "physical":
+        return (
+            "Physical one-way data diode in place: hardware link-level isolation. "
+            "Software classification/whitelist/scan still applied as defence-in-depth."
+        )
+    if current == "offline":
+        return (
+            "Offline-media import scheme: transfers require explicit manual confirmation. "
+            "Not equivalent to a physical one-way data diode (contract Art. 10.4)."
+        )
+    return (
+        "Software-defined one-way trust channel. Per contract Art. 10.4 this is NOT "
+        "equivalent to a physical one-way data diode and provides no physical link-level "
+        "isolation guarantee. Internal data has no path outward."
+    )
+
 # Markers that indicate the content is internal/confidential and therefore must
 # never be present in the external machine or cross the gate.
 _INTERNAL_MARKERS = [
@@ -124,6 +162,8 @@ def submit_packet(
     internal/confidential markers — internal data must never enter the external
     machine.
     """
+    if not is_enabled():
+        raise DiodeDisabled("the one-way data transfer mechanism is disabled")
     classification = (classification or "public").strip().lower()
     packet = IntelligencePacket(
         user_id=user_id,
@@ -152,20 +192,29 @@ def submit_packet(
     return packet
 
 
-def transfer_packet(session: Session, user_id: int, packet_id: int) -> dict:
+def transfer_packet(
+    session: Session, user_id: int, packet_id: int, confirm: bool = False
+) -> dict:
     """The one-way gate: push a staged public packet INTO the internal KB.
 
     Re-validates classification, source whitelist and content scan at the gate.
     On success the packet content is ingested as an internal knowledge-base
-    document (the only direction data ever flows). Raises ``LookupError`` /
-    ``ValueError`` on missing/invalid packets.
+    document (the only direction data ever flows). In ``offline`` mode an explicit
+    ``confirm=True`` is required (manual offline-media import). Raises
+    ``DiodeDisabled`` / ``LookupError`` / ``ValueError``.
     """
+    if not is_enabled():
+        raise DiodeDisabled("the one-way data transfer mechanism is disabled")
+
     packet = session.get(IntelligencePacket, packet_id)
     if packet is None or packet.user_id != user_id:
         raise LookupError(f"intelligence packet {packet_id} not found")
 
     if packet.status == "transferred":
         raise ValueError("packet already transferred")
+
+    if mode() == "offline" and not confirm:
+        raise ValueError("offline transfer mode requires manual confirmation (confirm=true)")
 
     # Gate checks (defence-in-depth — re-checked even though submit_packet did).
     if packet.classification != ALLOWED_CLASSIFICATION:
@@ -223,17 +272,19 @@ def list_packets(session: Session, user_id: int, status: str | None = None) -> l
 
 def policy() -> dict:
     """The enforced one-way policy — surfaced to clients for transparency."""
+    current = mode()
+    physical = current == "physical"
     return {
+        "enabled": is_enabled(),
+        "mode": current,
+        "available_modes": list(DIODE_MODES),
         "transfer_direction": TRANSFER_DIRECTION,
         "allowed_classification": ALLOWED_CLASSIFICATION,
         "source_whitelist": _source_whitelist() or "not configured (allow-all)",
         "internal_marker_rules": len(_INTERNAL_RE),
         "internal_egress_supported": False,
-        "software_defined": True,
-        "physical_diode_equivalent": False,
-        "note": (
-            "Software-defined one-way trust channel. Per contract Article 10.4 this is "
-            "NOT equivalent to a physical one-way data diode and provides no physical "
-            "link-level isolation guarantee. Internal data has no path outward."
-        ),
+        "requires_manual_confirmation": current == "offline",
+        "software_defined": not physical,
+        "physical_diode_equivalent": physical,
+        "note": _mode_note(current),
     }

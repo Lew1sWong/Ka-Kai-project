@@ -46,15 +46,18 @@ async def ingest_packet(
     current_user: User = Depends(require_role(ANALYST)),
     session: Session = Depends(get_session),
 ):
-    packet = data_diode.submit_packet(
-        session,
-        current_user.id,
-        source=body.source,
-        title=body.title,
-        content=body.content,
-        source_url=body.source_url,
-        classification=body.classification,
-    )
+    try:
+        packet = data_diode.submit_packet(
+            session,
+            current_user.id,
+            source=body.source,
+            title=body.title,
+            content=body.content,
+            source_url=body.source_url,
+            classification=body.classification,
+        )
+    except data_diode.DiodeDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     record_audit(
         session,
         user_id=current_user.id,
@@ -83,11 +86,14 @@ async def list_packets(
 async def transfer_packet(
     packet_id: int,
     request: Request,
+    confirm: bool = False,
     current_user: User = Depends(require_role(ANALYST)),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     try:
-        result = data_diode.transfer_packet(session, current_user.id, packet_id)
+        result = data_diode.transfer_packet(session, current_user.id, packet_id, confirm=confirm)
+    except data_diode.DiodeDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

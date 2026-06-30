@@ -318,7 +318,9 @@ export default function ModulesPage() {
       <Section title="Data Diode — One-Way Transfer (contract Art. 2.3 / 10.4)">
         <p style={{ color: "#8fa3bf", fontSize: 12, marginTop: 0 }}>
           Public intel flows External → Internal only. Confidential/internal content is
-          rejected at the gate; there is no internal → external path.
+          rejected at the gate; there is no internal → external path. User-selectable per
+          deployment (enabled on/off; mode software / offline / physical) — click
+          <b> Show policy</b> to see the active config.
         </p>
         <input style={inputStyle} value={dSource} onChange={(e) => setDSource(e.target.value)} placeholder="Source (e.g. reuters.com)" />
         <input style={inputStyle} value={dTitle} onChange={(e) => setDTitle(e.target.value)} placeholder="Title" />
@@ -347,7 +349,7 @@ export default function ModulesPage() {
           onClick={guard(async () => {
             const pkt = diodeOut?.packet;
             if (!pkt?.id) throw new Error("Submit a packet first");
-            const r = await api(`/api/diode/packets/${pkt.id}/transfer`, { method: "POST" });
+            const r = await api(`/api/diode/packets/${pkt.id}/transfer?confirm=true`, { method: "POST" });
             setDiodeOut(r);
             setDiodeList(await api("/api/diode"));
           })}
