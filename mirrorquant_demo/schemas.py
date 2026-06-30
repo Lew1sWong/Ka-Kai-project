@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -34,3 +34,35 @@ class HeroCreate(BaseModel):
 
 class SearchRunCreate(BaseModel):
     mode: Mode = "price_dna"
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("Email is required.")
+        return normalized
+
+
+class RegisterRequest(LoginRequest):
+    confirm_password: str = Field(min_length=1, max_length=255)
+
+    @field_validator("confirm_password")
+    @classmethod
+    def normalize_confirm_password(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Confirm password is required.")
+        return stripped
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    is_verified: bool
+    verified_at: datetime | None = None

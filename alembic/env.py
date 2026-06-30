@@ -2,10 +2,9 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from mirrorquant_demo.database import Base
+from mirrorquant_demo.database import Base, DATABASE_URL
 
 import mirrorquant_demo.models
-import os
 
 from alembic import context
 
@@ -18,9 +17,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = os.getenv("MIRRORQUANT_DATABASE_URL") or os.getenv("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

@@ -698,8 +698,8 @@ label,
 
 .workspace-frame {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: 364px minmax(0, 1fr);
+  gap: 32px;
   align-items: start;
 }
 
@@ -728,52 +728,259 @@ label,
   position: sticky;
   top: 18px;
   display: grid;
-  gap: 22px;
-  padding: 28px 24px;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 18px;
+  min-height: calc(100vh - 44px);
+  padding: 22px 18px 18px;
+  border-radius: 30px;
+  overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(155, 192, 255, 0.05), transparent 100%),
-    rgba(5, 10, 16, 0.9);
+    linear-gradient(180deg, rgba(155, 192, 255, 0.07), transparent 100%),
+    linear-gradient(180deg, rgba(102, 240, 203, 0.045), transparent 24%),
+    rgba(5, 10, 16, 0.94);
 }
 
-.workspace-quicklinks-head h3 {
-  margin: 10px 0 0;
-  font-size: 1.18rem;
-  font-family: "IBM Plex Mono", monospace;
+.workspace-brand {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 8px 8px 18px;
+  background: transparent;
+  color: var(--bg-ink);
+  text-align: left;
+  border-bottom: 1px solid rgba(155, 192, 255, 0.08);
 }
 
-.workspace-quicklinks-head p:last-child {
-  margin: 10px 0 0;
+.workspace-brand-mark {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(102, 240, 203, 0.24), transparent 52%),
+    linear-gradient(145deg, rgba(11, 24, 38, 0.96), rgba(5, 10, 16, 0.98));
+  border: 1px solid rgba(102, 240, 203, 0.14);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
+}
+
+.workspace-brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: auto 10px 10px auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(102, 240, 203, 0.6), transparent 72%);
+  filter: blur(6px);
+}
+
+.workspace-brand-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.28);
+}
+
+.workspace-brand-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-brand-copy strong {
+  font-size: 1.26rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-brand-copy small {
+  color: var(--bg-muted);
+  line-height: 1.45;
+  max-width: 18ch;
+}
+
+.workspace-quicklinks-head {
+  padding: 0 8px;
+}
+
+.workspace-quicklinks-head .app-eyebrow {
+  margin: 0;
+  letter-spacing: 0.28em;
 }
 
 .workspace-quicklinks-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
+  align-content: start;
 }
 
 .workspace-quicklink {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(155, 192, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--bg-ink);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--bg-muted);
   text-align: left;
   box-shadow: none;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.workspace-quicklink::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14%;
+  bottom: 14%;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(102, 240, 203, 1), rgba(83, 202, 255, 0.88));
+  opacity: 0;
+  transform: scaleY(0.45);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .workspace-quicklink:hover {
-  background: rgba(102, 240, 203, 0.08);
-  border-color: rgba(102, 240, 203, 0.22);
+  background: rgba(102, 240, 203, 0.06);
+  color: var(--bg-ink);
 }
 
-.workspace-quicklink-index {
-  min-width: 34px;
-  color: var(--gold);
-  font-size: 0.76rem;
-  font-family: "IBM Plex Mono", monospace;
+.workspace-quicklink.is-active {
+  background:
+    linear-gradient(90deg, rgba(9, 57, 49, 0.78), rgba(8, 29, 33, 0.52)),
+    rgba(9, 17, 26, 0.92);
+  border-color: rgba(102, 240, 203, 0.18);
+  color: var(--bg-ink);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+.workspace-quicklink:hover::before,
+.workspace-quicklink.is-active::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.workspace-quicklink-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(155, 192, 255, 0.06);
+}
+
+.workspace-quicklink.is-active .workspace-quicklink-icon {
+  background: rgba(102, 240, 203, 0.1);
+  border-color: rgba(102, 240, 203, 0.16);
+}
+
+.workspace-nav-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-quicklink-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-quicklink-copy strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.workspace-quicklink-copy small {
+  color: rgba(143, 168, 190, 0.76);
+}
+
+.workspace-quicklink.is-active .workspace-quicklink-copy small,
+.workspace-quicklink:hover .workspace-quicklink-copy small {
+  color: rgba(234, 245, 255, 0.72);
+}
+
+.workspace-quicklinks-footer {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 16px 8px 0;
+  border-top: 1px solid rgba(155, 192, 255, 0.08);
+}
+
+.workspace-quicklinks-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(143, 168, 190, 0.88);
+  font-size: 0.82rem;
+}
+
+.workspace-quicklinks-user-email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-live-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 14px rgba(102, 240, 203, 0.92);
+}
+
+.workspace-sidebar-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(155, 192, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 100%),
+    linear-gradient(140deg, rgba(102, 240, 203, 0.07), transparent 55%),
+    rgba(7, 14, 22, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.workspace-sidebar-card-title {
+  margin: 0;
+  color: var(--bg-ink);
+  font-weight: 600;
+}
+
+.workspace-sidebar-card-copy {
+  margin: 0;
+  color: rgba(143, 168, 190, 0.86);
+  line-height: 1.55;
+}
+
+.workspace-sidebar-card strong {
+  color: var(--mint);
+  font-size: 1.55rem;
+  letter-spacing: 0.03em;
+}
+
+.workspace-sidebar-card span {
+  color: rgba(234, 245, 255, 0.72);
+  font-size: 0.86rem;
 }
 
 .app-topbar-actions {
@@ -1768,6 +1975,7 @@ button:focus {
 
   .workspace-quicklinks {
     position: static;
+    min-height: auto;
   }
 }
 
@@ -1836,5 +2044,14 @@ button:focus {
 
   .workspace-quicklink {
     justify-content: flex-start;
+  }
+
+  .workspace-brand {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .workspace-brand-mark {
+    width: 72px;
+    height: 72px;
   }
 }

@@ -30,8 +30,21 @@ The app still has a hybrid architecture:
 ## Project Layout
 
 ```text
+backend/
+  app/
+    main.py
+frontend/
+  mirrorquant-next/
+    app/
+      page.tsx
+      workspace/
+        page.tsx
+    components/
+      MirrorQuantApp.tsx
+      MirrorQuantAppClient.jsx
+    package.json
 mirrorquant_demo/
-  app.py
+  app.py                # compatibility shim for older uvicorn commands
   database.py
   models.py
   schemas.py
@@ -106,16 +119,48 @@ python -m alembic upgrade head
 
 ## Run The App
 
-Start the FastAPI app:
+Start the backend API:
+
+```bash
+python -m uvicorn backend.app.main:app --reload
+```
+
+Run that command from the repo root:
+
+```text
+C:\Users\cheng\Desktop\Hand-drawn-agent
+```
+
+In a second terminal, start the Next.js frontend:
+
+```bash
+cd frontend/mirrorquant-next
+npm install
+npm run dev
+```
+
+Set `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000` in `frontend/mirrorquant-next/.env.local` if it is not already there.
+
+Then open:
+
+```text
+http://127.0.0.1:3000
+```
+
+The backend on `http://127.0.0.1:8000` now acts as the API server and redirects browser page requests to the Next frontend.
+
+Compatibility note:
 
 ```bash
 python -m uvicorn mirrorquant_demo.app:app --reload
 ```
 
-Then open:
+That older command still works because `mirrorquant_demo/app.py` now forwards to `backend.app.main`.
 
-```text
-http://127.0.0.1:8000
+If you are already inside `backend/app`, use:
+
+```bash
+python -m uvicorn dev_main:app --reload
 ```
 
 ## Main User Flow
@@ -418,7 +463,7 @@ If someone asks whether the AI is real:
 
 ### Frontend
 
-- single-page dashboard
+- Next.js App Router frontend
 - custom hero creation inputs
 - saved heroes sidebar
 - saved search history sidebar
@@ -430,6 +475,7 @@ If someone asks whether the AI is real:
 - `SQLAlchemy`
 - PostgreSQL-ready persistence layer
 - `Alembic` schema migrations
+- `backend/app/main.py` API entrypoint
 - saved hero and search-run workflow
 - VQ-VAE search orchestration for `Price DNA`
 
