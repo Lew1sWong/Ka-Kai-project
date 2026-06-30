@@ -603,16 +603,6 @@ async def list_audit_logs(
     }
 
 
-@app.get("/{full_path:path}", include_in_schema=False)
-async def spa_fallback(full_path: str, request: Request):
-    if full_path.startswith("api/") or full_path == "health":
-        raise HTTPException(status_code=404, detail="Route not found")
-    redirect_path = full_path
-    if request.url.query:
-        redirect_path = f"{redirect_path}?{request.url.query}"
-    return _frontend_redirect(redirect_path)
-
-
 @app.post("/api/heroes/{hero_id}/archive")
 async def archive_saved_hero(
     hero_id: int,
@@ -742,3 +732,17 @@ async def logout(request: Request):
 @app.get("/api/auth/me")
 async def me(current_user: User = Depends(get_current_user)):
     return {"user": _serialize_user(current_user)}
+
+
+# SPA catch-all — MUST stay last so it never shadows concrete API routes.
+# Starlette matches routes in registration order, so a GET /{full_path:path}
+# registered earlier would shadow later GET routes (e.g. /api/auth/verify-email,
+# /api/auth/me), permanently breaking email verification and session bootstrap.
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str, request: Request):
+    if full_path.startswith("api/") or full_path == "health":
+        raise HTTPException(status_code=404, detail="Route not found")
+    redirect_path = full_path
+    if request.url.query:
+        redirect_path = f"{redirect_path}?{request.url.query}"
+    return _frontend_redirect(redirect_path)

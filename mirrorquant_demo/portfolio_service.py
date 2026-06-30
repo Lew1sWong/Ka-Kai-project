@@ -123,6 +123,22 @@ def import_holdings(
         entry["shares"] = _coerce_float(raw.get("shares"), "shares")
         parsed.append(entry)
 
+    # Aggregate duplicate tickers (sum weight/shares; keep first non-empty sector)
+    # so each ticker is stored exactly once. Otherwise downstream weight
+    # normalization and sector exposure double-count the repeated rows.
+    aggregated: dict[str, dict[str, Any]] = {}
+    for item in parsed:
+        existing = aggregated.get(item["ticker"])
+        if existing is None:
+            aggregated[item["ticker"]] = dict(item)
+            continue
+        for key in ("weight", "shares"):
+            if item[key] is not None:
+                existing[key] = (existing[key] or 0.0) + item[key]
+        if existing["sector"] is None:
+            existing["sector"] = item["sector"]
+    parsed = list(aggregated.values())
+
     use_weights = any(item["weight"] is not None for item in parsed)
     if use_weights:
         weights = [item["weight"] or 0.0 for item in parsed]
