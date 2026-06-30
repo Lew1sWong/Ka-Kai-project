@@ -97,6 +97,20 @@ def fetch_daily_bars(symbol: str, start: str, end: str, adjust: str) -> pd.DataF
     return normalized.sort_values("date").reset_index(drop=True)
 
 
+def _ashare_fallback(symbol: str, start: str, end: str, adjust: str):
+    """On akshare failure, fall back to the dependency-free Ashare (Tencent/Sina) fetcher."""
+    try:
+        try:
+            from mirrorquant_demo.fetch_prices_ashare import fetch_daily_bars as _ashare_fetch
+        except ImportError:
+            from fetch_prices_ashare import fetch_daily_bars as _ashare_fetch
+        print("  -> falling back to Ashare (Tencent/Sina)...")
+        return _ashare_fetch(symbol, start, end, adjust)
+    except Exception as exc:  # noqa: BLE001 - fallback is best-effort
+        print(f"  Ashare fallback failed for {symbol}: {exc} — skipping.")
+        return None
+
+
 def main():
     args = parse_args()
     adjust = ADJUST_MAP[args.adjust]
@@ -121,7 +135,10 @@ def main():
                 )
             )
         except RuntimeError as exc:
-            print(f"  Warning: {exc} — skipping.")
+            print(f"  Warning: {exc}")
+            fallback = _ashare_fallback(ticker, args.start, args.end, adjust)
+            if fallback is not None:
+                frames.append(fallback)
 
     if not frames:
         raise SystemExit("No data fetched. Check your tickers and date range.")
