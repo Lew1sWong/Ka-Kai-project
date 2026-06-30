@@ -10,8 +10,14 @@ itsdangerous>=2.2.0
 # Volcengine SDK  (VisualService — cv_submit_task / cv_get_result)
 volcengine>=1.0.98
 
-# LLM  (DeepSeek via OpenAI-compatible API)
+# LLM  (DeepSeek via OpenAI-compatible API; Claude optional via MIRRORQUANT_LLM_PROVIDER=anthropic)
 openai>=1.30.0
+anthropic>=0.39.0
+
+# Knowledge-base document ingestion (research hub) — optional formats, imported lazily
+pypdf>=4.2.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
 
 # Telegram bot
 aiogram>=3.4.1

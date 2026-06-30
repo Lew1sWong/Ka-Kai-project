@@ -92,6 +92,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(32), default="analyst", server_default="analyst")
     is_verified: Mapped[bool] = mapped_column(default=False)
     verification_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     verification_token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -104,3 +105,18 @@ class User(Base):
         cascade="all, delete-orphan", # If user is deleted, the heroes should be deleted as well.
                                       # Prevents orphan data not linked to a user/owner.
     )
+
+
+class AuditLog(Base):
+    """Operation/audit trail for the Permission & Log System."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    action: Mapped[str] = mapped_column(String(128), index=True)
+    target_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

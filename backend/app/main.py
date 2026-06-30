@@ -21,7 +21,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from mirrorquant_demo.database import Base, DATABASE_URL, SessionLocal, engine, get_session
 from mirrorquant_demo.schemas import HeroCreate, SearchRunCreate, LoginRequest, RegisterRequest
-from mirrorquant_demo.models import User
+from mirrorquant_demo.models import AuditLog, User
+from mirrorquant_demo import compliance
+from mirrorquant_demo.permissions import ADMIN
 from mirrorquant_demo.search_service import (
     create_or_update_hero,
     get_saved_hero,
@@ -33,6 +35,15 @@ from mirrorquant_demo.search_service import (
     validate_hero_window,
     archive_hero,
 )
+from backend.app.deps import (
+    get_current_user,
+    get_current_verified_user,
+    record_audit,
+    require_role,
+)
+from backend.app.routers.hypothesis import router as hypothesis_router
+from backend.app.routers.portfolio import router as portfolio_router
+from backend.app.routers.knowledge_base import router as knowledge_base_router
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = APP_DIR.parent
@@ -121,6 +132,7 @@ def _serialize_user(user: User) -> dict[str, object]:
     return {
         "id": user.id,
         "email": user.email,
+        "role": getattr(user, "role", "analyst"),
         "is_verified": bool(user.is_verified),
         "verified_at": user.verified_at.isoformat() if user.verified_at else None,
     }
@@ -208,29 +220,6 @@ def _send_verification_email(user: User, verification_url: str) -> str:
     print(f"[mirrorquant] verification link for {user.email}: {verification_url}")
     return "dev-link"
 
-
-def get_current_user(
-    request: Request,
-    session: Session = Depends(get_session),
-) -> User:
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user = session.get(User, user_id)
-    if user is None:
-        request.session.clear()
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    return user
-
-
-def get_current_verified_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if not current_user.is_verified:
-        raise HTTPException(status_code=403, detail="Verify your email before using MirrorQuant.")
-    return current_user
 
 def _load_json(filename: str):
     with (DATA_DIR / filename).open("r", encoding="utf-8") as handle:
@@ -349,6 +338,7 @@ def _ensure_dev_user(session: Session) -> int:
         user = User(
             email=DEV_USER_EMAIL,
             password_hash=_hash_password(DEV_USER_PASSWORD),
+            role=ADMIN,
             is_verified=True,
             verified_at=_utcnow(),
         )
@@ -359,6 +349,7 @@ def _ensure_dev_user(session: Session) -> int:
 
     if user.password_hash in LEGACY_PASSWORD_HASHES or not user.is_verified:
         user.password_hash = _hash_password(DEV_USER_PASSWORD)
+        user.role = ADMIN
         user.is_verified = True
         user.verification_token_hash = None
         user.verification_token_expires_at = None
@@ -388,6 +379,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Feature modules (contract Articles 4.x): hypothesis/IC, portfolio risk, knowledge base.
+app.include_router(hypothesis_router)
+app.include_router(portfolio_router)
+app.include_router(knowledge_base_router)
 
 
 @app.on_event("startup")
@@ -424,16 +420,28 @@ async def list_heroes(
 
 @app.post("/api/heroes")
 async def create_hero(
-    payload: HeroCreate, 
+    payload: HeroCreate,
+    request: Request,
     current_user: User = Depends(get_current_verified_user),
     session: Session = Depends(get_session)
 ):
     try:
-        return create_or_update_hero(session, payload, current_user.id)
+        result = create_or_update_hero(session, payload, current_user.id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    record_audit(
+        session,
+        user_id=current_user.id,
+        action="hero.create",
+        target_type="hero",
+        target_id=result.get("id") if isinstance(result, dict) else None,
+        detail={"ticker": payload.ticker},
+        request=request,
+    )
+    return result
 
 
 @app.get("/api/heroes/{hero_id}")
@@ -464,15 +472,35 @@ async def list_hero_search_runs(
 async def create_search_run(
     hero_id: int,
     payload: SearchRunCreate,
+    request: Request,
     current_user: User = Depends(get_current_verified_user),
     session: Session = Depends(get_session),
 ):
     try:
-        return run_search_for_hero(session, hero_id, payload.mode, current_user.id)
+        result = run_search_for_hero(
+            session, hero_id, payload.mode, current_user.id, market=payload.market
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    record_audit(
+        session,
+        user_id=current_user.id,
+        action="search_run.create",
+        target_type="hero",
+        target_id=hero_id,
+        detail={"mode": payload.mode, "market": payload.market},
+        request=request,
+    )
+    return compliance.attach_compliance(
+        result,
+        sources=[
+            compliance.source("model", "vqvae", "MirrorQuant VQ-VAE regime search"),
+            compliance.source("dataset", "prices.csv"),
+        ],
+    )
 
 
 @app.get("/api/search-runs/{search_run_id}")
@@ -487,7 +515,10 @@ async def get_saved_search_run(
             status_code=404,
             detail=f"Search run {search_run_id} was not found",
         )
-    return run
+    return compliance.attach_compliance(
+        run,
+        sources=[compliance.source("model", "vqvae"), compliance.source("dataset", "prices.csv")],
+    )
 
 
 @app.get("/api/price-series")
@@ -521,16 +552,52 @@ async def get_price_series(ticker: str, start_date: str, end_date: str):
 @app.get("/api/market-watch")
 async def get_market_watch():
     live_market_watch = _build_live_market_watch()
-    if live_market_watch is not None:
-        return live_market_watch
-    return _load_json("market_watch.json")
+    payload = live_market_watch if live_market_watch is not None else _load_json("market_watch.json")
+    return compliance.attach_compliance(
+        payload, sources=[compliance.source("dataset", "market_watch_prices.csv")]
+    )
 
 
 @app.get("/api/industry-chain/{ticker}")
 async def get_industry_chain(ticker: str):
     chain_data = _load_json("industry_chain.json")
     normalized = ticker.upper()
-    return {"ticker": normalized, "relationships": chain_data.get(normalized, [])}
+    return compliance.attach_compliance(
+        {"ticker": normalized, "relationships": chain_data.get(normalized, [])},
+        sources=[compliance.source("dataset", "industry_chain.json", "curated value-chain map")],
+    )
+
+
+@app.get("/api/compliance/disclaimer")
+async def get_compliance_disclaimer():
+    return compliance.disclaimer()
+
+
+@app.get("/api/audit-logs")
+async def list_audit_logs(
+    limit: int = 100,
+    current_user: User = Depends(require_role(ADMIN)),
+    session: Session = Depends(get_session),
+):
+    limit = max(1, min(limit, 500))
+    rows = session.scalars(
+        select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    ).all()
+    return {
+        "audit_logs": [
+            {
+                "id": row.id,
+                "user_id": row.user_id,
+                "action": row.action,
+                "target_type": row.target_type,
+                "target_id": row.target_id,
+                "detail": row.detail_json,
+                "ip_address": row.ip_address,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ]
+    }
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
@@ -546,12 +613,23 @@ async def spa_fallback(full_path: str, request: Request):
 @app.post("/api/heroes/{hero_id}/archive")
 async def archive_saved_hero(
     hero_id: int,
-    current_user: User = Depends(get_current_verified_user), 
+    request: Request,
+    current_user: User = Depends(get_current_verified_user),
     session: Session = Depends(get_session)):
     try:
-        return archive_hero(session, hero_id, current_user.id)
+        result = archive_hero(session, hero_id, current_user.id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+    record_audit(
+        session,
+        user_id=current_user.id,
+        action="hero.archive",
+        target_type="hero",
+        target_id=hero_id,
+        request=request,
+    )
+    return result
 
 @app.post("/api/auth/login")
 async def login(
@@ -568,6 +646,7 @@ async def login(
         session.commit()
 
     request.session["user_id"] = user.id
+    record_audit(session, user_id=user.id, action="auth.login", request=request)
     return {"user": _serialize_user(user)}
 
 
